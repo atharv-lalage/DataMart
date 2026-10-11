@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
+import { Trash2 } from 'lucide-react';
+import axios from 'axios';
+import API_BASE_URL from './config';
 import Sidebar from './components/Sidebar';
 import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
@@ -27,6 +30,7 @@ function AnimatedRoutes() {
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [dropping, setDropping] = useState(false);
 
   useEffect(() => {
     const auth = sessionStorage.getItem('authenticated');
@@ -35,6 +39,19 @@ function App() {
     }
     setLoading(false);
   }, []);
+
+  const handleDropDataset = async () => {
+    if (!window.confirm("Are you sure you want to completely wipe the dataset and empty the Data Warehouse? This cannot be undone.")) return;
+    setDropping(true);
+    try {
+      await axios.post(`${API_BASE_URL}/api/dataset/drop`);
+      alert("System wiped successfully. You can now upload a new dataset.");
+      window.location.reload();
+    } catch (err) {
+      alert("Failed to drop dataset: " + (err.response?.data?.error || err.message));
+    }
+    setDropping(false);
+  };
 
   if (loading) return <div className="app"></div>;
 
@@ -50,10 +67,21 @@ function App() {
       <div className="app">
         <Sidebar />
         <div className="main-content">
-          <header className="top-header">
-            <div className="header-user">
-              <span>Administrator</span>
-              <div className="avatar"></div>
+          <header className="top-header" style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <div></div>
+            <div className="header-user" style={{ gap: '1.5rem' }}>
+              <button 
+                className="btn btn-outline" 
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderColor: '#ef4444', color: '#ef4444', padding: '0.4rem 0.8rem' }}
+                onClick={handleDropDataset}
+                disabled={dropping}
+              >
+                <Trash2 size={16} /> {dropping ? 'Dropping...' : 'Drop Dataset'}
+              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <span>Administrator</span>
+                <div className="avatar"></div>
+              </div>
             </div>
           </header>
           <AnimatedRoutes />

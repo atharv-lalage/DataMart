@@ -1,6 +1,6 @@
-Flask
-flask-cors
-gunicorn
+fastapi
+uvicorn[standard]
+python-multipart
 pandas
 scikit-learn
 psycopg2-binary

@@ -163,9 +163,27 @@ export default function ETLTracker() {
   return (
     <motion.div className="container" initial="initial" animate="in" exit="out" variants={pageVariants}>
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-        <div>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
           <h1>Data Cleaner</h1>
-          <p>Watch how messy data is cleaned up behind the scenes.</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem' }}>
+            <p style={{ margin: 0 }}>Watch how messy data is cleaned up behind the scenes.</p>
+            {datasetFiles.length > 0 && (
+              <motion.span
+                initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  background: 'rgba(99,102,241,0.1)',
+                  border: '1px solid rgba(99,102,241,0.35)',
+                  color: '#a5b4fc',
+                  padding: '3px 10px', borderRadius: '20px',
+                  fontSize: '0.78rem', fontWeight: 600, fontFamily: 'monospace'
+                }}
+              >
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981', display: 'inline-block' }} />
+                {datasetFiles[datasetFiles.length - 1].name}
+              </motion.span>
+            )}
+          </div>
         </div>
         <button
           className="btn btn-primary"

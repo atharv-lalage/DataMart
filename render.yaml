@@ -10,7 +10,7 @@ services:
     buildCommand: |
       cd backend && pip install -r requirements.txt
     startCommand: |
-      cd backend && gunicorn app:app --bind 0.0.0.0:$PORT --timeout 120 --workers 2
+      cd backend && uvicorn app:app --host 0.0.0.0 --port $PORT --workers 2
     envVars:
       - key: DATABASE_URL
         sync: false  # You'll set this manually in Render dashboard

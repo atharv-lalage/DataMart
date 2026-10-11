@@ -2,6 +2,7 @@ import pandas as pd
 from sqlalchemy import create_engine
 import numpy as np
 import os
+import json
 from dotenv import load_dotenv
 from sqlalchemy.dialects.postgresql import insert
 
@@ -21,12 +22,19 @@ DB_HOST = 'localhost'
 DB_PORT = '5432'
 DB_NAME = 'ecommerce_db'
 
+try:
+    from groq import Groq
+    groq_client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+except Exception as e:
+    groq_client = None
+    print(f"Groq API not loaded: {e}")
+
 def get_engine():
     if DATABASE_URL:
         return create_engine(DATABASE_URL)
     return create_engine(f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}')
 
-def normalize_columns(df):
+def normalize_columns(df, log_func=print):
     """
     Map any dataset's column names to a standard internal schema.
     Supports: Online Retail (.xlsx), Superstore (.csv), train.csv
@@ -98,8 +106,44 @@ def normalize_columns(df):
             break
 
     df = df.rename(columns=rename)
-    print(f"  Column mapping applied: {rename if rename else 'none needed'}")
+    log_func(f"  Column mapping applied: {rename if rename else 'none needed'}")
 
+    # --- AI FALLBACK MAPPING ---
+    required_cols = ['CustomerID', 'InvoiceNo', 'InvoiceDate', 'StockCode', 'Description', 'Quantity', 'UnitPrice', 'Country', 'Category']
+    missing = [c for c in required_cols if c not in df.columns]
+    unmapped_cols = [c for c in df.columns if c not in required_cols and c != '_SalesTotal']
+    
+    if missing and unmapped_cols and groq_client:
+        log_func(f"  AI fallback: attempting to map {missing} from unknown columns: {unmapped_cols}")
+        prompt = f"""You are an automated ETL data mapper.
+The following required columns are missing: {missing}
+The dataset has the following unknown columns: {unmapped_cols}
+
+Map the missing required columns to the most logical unknown columns.
+Return ONLY a valid JSON object where keys are the unknown column names and values are the required column names.
+Example: {{"client_number": "CustomerID", "purchased_on": "InvoiceDate"}}
+If an unknown column does not logically map to a missing required column, do not include it. No markdown."""
+        try:
+            completion = groq_client.chat.completions.create(
+                model="openai/gpt-oss-20b",
+                messages=[{"role": "user", "content": prompt}]
+            )
+            ai_res = completion.choices[0].message.content.strip()
+            
+            import re
+            match = re.search(r'\{.*\}', ai_res, re.DOTALL)
+            if match:
+                ai_mapping = json.loads(match.group(0))
+            else:
+                ai_mapping = json.loads(ai_res)
+            # Filter mapping to ensure valid names are used
+            clean_mapping = {k: v for k, v in ai_mapping.items() if k in unmapped_cols and v in missing}
+            if clean_mapping:
+                df = df.rename(columns=clean_mapping)
+                log_func(f"  AI Column Mapping Applied: {clean_mapping}")
+        except Exception as e:
+            log_func(f"  AI mapping failed: {e}")
+            log_func(f"  AI Response was: {repr(ai_res)}")
     # If only SalesTotal was available, back-calculate UnitPrice
     if '_SalesTotal' in df.columns and 'UnitPrice' not in df.columns:
         # If no Quantity column exists, default to 1 per row (sales-level datasets)
@@ -123,16 +167,16 @@ def normalize_columns(df):
     return df
 
 
-def load_and_clean_data(file_path):
-    print("Loading dataset...")
+def load_and_clean_data(file_path, log_func=print):
+    log_func("Loading dataset...")
     if file_path.endswith('.csv'):
         df = pd.read_csv(file_path, encoding='ISO-8859-1')
     else:
         df = pd.read_excel(file_path)
-    print(f"Original shape: {df.shape}")
+    log_func(f"Original shape: {df.shape}")
 
     # Normalize all columns to the internal schema first
-    df = normalize_columns(df)
+    df = normalize_columns(df, log_func)
 
     # 1. Remove Null Values in CustomerID
     if 'CustomerID' in df.columns:
@@ -172,10 +216,7 @@ def load_and_clean_data(file_path):
         df['Category'] = df['Category'].fillna('General')
 
     # 6. Convert price to INR if the values are small (likely GBP/USD, assume < 200 per unit = foreign currency)
-    if 'UnitPrice' in df.columns:
-        median_price = df['UnitPrice'].median()
-        if 0 < median_price < 200:
-            df['UnitPrice'] = df['UnitPrice'] * 105  # convert to INR approx
+    # Currency conversion removed to keep exact figures as requested.
 
     # 7. Compute Amount
     if 'UnitPrice' in df.columns and 'Quantity' in df.columns:

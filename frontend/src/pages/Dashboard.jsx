@@ -250,7 +250,13 @@ export default function Dashboard() {
             </div>
           </div>
           <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-            onClick={() => downloadCSV(marketBasket, 'market_basket_rules.csv')}>
+            onClick={() => {
+              downloadCSV(predictions, 'sales_predictions.csv');
+              setTimeout(() => downloadCSV(clusters, 'customer_segments.csv'), 300);
+              setTimeout(() => downloadCSV(topProducts, 'top_products.csv'), 600);
+              setTimeout(() => downloadCSV(salesByCountry, 'sales_by_country.csv'), 900);
+              setTimeout(() => downloadCSV(marketBasket, 'market_basket_rules.csv'), 1200);
+            }}>
             <Download size={16} /> Export All
           </button>
         </div>

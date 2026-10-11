@@ -86,12 +86,22 @@ export default function OLAPTerminal() {
   const [executedData, setExecutedData] = useState(null);
   const [error, setError] = useState(null);
   const [isLive, setIsLive] = useState(false);
+  const [activeDataset, setActiveDataset] = useState(null);
 
   // Filter state per query type
   const [rollupFilters, setRollupFilters] = useState({ year: '' });
   const [drilldownFilters, setDrilldownFilters] = useState({ country: 'United Kingdom', year: '' });
   const [sliceFilters, setSliceFilters] = useState({ month: 12, year: 2010 });
   const [diceFilters, setDiceFilters] = useState({ categories: ['Gift', 'Decoration'], years: '2010,2011' });
+
+  React.useEffect(() => {
+    axios.get(`${API_BASE_URL}/api/dataset/info`)
+      .then(res => {
+        const files = res.data?.files || [];
+        if (files.length > 0) setActiveDataset(files[files.length - 1].name);
+      })
+      .catch(() => {});
+  }, []);
 
   const getFilters = () => {
     if (activeQuery === 'rollup') return rollupFilters;
@@ -232,7 +242,25 @@ export default function OLAPTerminal() {
     <motion.div className="container" initial="initial" animate="in" exit="out" variants={pageVariants}>
       <div className="page-header">
         <h1>Advanced Data Search</h1>
-        <p>Ask complex questions about your sales data and get instant answers.</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem' }}>
+          <p style={{ margin: 0 }}>Ask complex questions about your sales data and get instant answers.</p>
+          {activeDataset && (
+            <motion.span
+              initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                background: 'rgba(99,102,241,0.1)',
+                border: '1px solid rgba(99,102,241,0.35)',
+                color: '#a5b4fc',
+                padding: '3px 10px', borderRadius: '20px',
+                fontSize: '0.78rem', fontWeight: 600, fontFamily: 'monospace'
+              }}
+            >
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981', display: 'inline-block' }} />
+              {activeDataset}
+            </motion.span>
+          )}
+        </div>
       </div>
 
       <div className="dashboard-grid" style={{ gridTemplateColumns: 'minmax(280px, 1fr) 2.5fr' }}>
