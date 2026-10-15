@@ -25,21 +25,27 @@ export function getDatasetCurrency(filename = '', datasetInfo = null) {
     };
   }
 
-  // 2. Check explicitly configured user preference in localStorage if present
-  const stored = localStorage.getItem('datamart_dataset_currency');
-  if (stored) {
-    try {
-      const parsed = JSON.parse(stored);
-      if (parsed?.symbol) return parsed;
-    } catch {
-      if (typeof stored === 'string' && stored.length <= 3) {
-        return { symbol: stored, code: '', label: stored };
+  // 2. Check explicitly configured user preference or active dataset in localStorage if present
+  let activeFile = filename || datasetInfo?.current_file || '';
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const stored = localStorage.getItem('datamart_dataset_currency');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (parsed?.symbol) return parsed;
+      } catch {
+        if (typeof stored === 'string' && stored.length <= 3) {
+          return { symbol: stored, code: '', label: stored };
+        }
       }
+    }
+    if (!activeFile) {
+      activeFile = localStorage.getItem('datamart_active_dataset') || '';
     }
   }
 
   // 3. Match documented dataset profiles by filename
-  const clean = (filename || datasetInfo?.current_file || '').toLowerCase();
+  const clean = activeFile.toLowerCase();
 
   // UCI Online Retail Dataset -> British Pound (£)
   if (clean.includes('online_retail') || clean.includes('online retail') || clean.includes('retail.xlsx') || clean.includes('retail.csv')) {

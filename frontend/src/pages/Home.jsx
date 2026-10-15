@@ -1,233 +1,651 @@
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import API_BASE_URL from '../config';
-import { ShoppingCart, Search, TrendingUp, CheckCircle, AlertCircle, Package } from 'lucide-react';
-// JSX member expressions from Framer Motion are not recognized by the ESLint parser.
+import React, { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
+import {
+  ShoppingCart,
+  Search,
+  TrendingUp,
+  CheckCircle2,
+  AlertCircle,
+  Package,
+  Layers,
+  Store,
+  Sparkles,
+  ArrowRight,
+  X,
+  SlidersHorizontal,
+  RotateCcw,
+  Tag,
+  Check
+} from 'lucide-react';
+import axios from 'axios';
+import API_BASE_URL from '../config';
+import { Button, Card, Badge, PageHeader, EmptyState, Skeleton, Select } from '../components/common/index.js';
+import { getDatasetCurrency, formatCurrency } from '../utils/formatters.js';
 
 const pageVariants = {
-  initial: { opacity: 0, y: 20 },
+  initial: { opacity: 0, y: 12 },
   in: { opacity: 1, y: 0 },
-  out: { opacity: 0, y: -20 }
+  out: { opacity: 0, y: -12 }
 };
 
 const containerVariants = {
   hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.05 } }
+  show: { opacity: 1, transition: { staggerChildren: 0.04 } }
 };
 
 const itemVariants = {
-  hidden: { opacity: 0, scale: 0.95 },
-  show: { opacity: 1, scale: 1, transition: { type: 'spring', bounce: 0.4 } }
+  hidden: { opacity: 0, y: 10 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.2 } }
 };
 
 export default function Home() {
+  const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [marketBasket, setMarketBasket] = useState([]);
+  const [activeDataset, setActiveDataset] = useState(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return localStorage.getItem('datamart_active_dataset') || null;
+    }
+    return null;
+  });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [categories, setCategories] = useState(['All']);
-  const [txState, setTxState] = useState({}); // productId -> { status, message }
+  const [sortBy, setSortBy] = useState('default');
+  const [txState, setTxState] = useState({}); // productId -> { status: 'loading' | 'success' | 'error', message, order_id }
+  const [recentOrders, setRecentOrders] = useState([]);
+  const [quantities, setQuantities] = useState({}); // productId -> quantity
 
   useEffect(() => {
-    // Always fetch fresh from the backend — no sessionStorage lock
-    // so the store shows the current dataset's products
-    const fetchProducts = () =>
-      axios.get(`${API_BASE_URL}/api/products`)
-        .then(res => {
-          const data = res.data;
-          setProducts(data);
+    let isMounted = true;
 
-          // ── Dynamically build the category list from whatever the dataset has ──
-          const cats = ['All', ...new Set(data.map(p => p.category).filter(Boolean))];
-          setCategories(cats);
-          setLoading(false);
-        })
-        .catch(() => {
-          // Minimal generic fallback — no product names, just placeholders
-          setProducts([]);
-          setCategories(['All']);
-          setLoading(false);
-        });
+    const fetchData = async () => {
+      setLoading(true);
+      const token = localStorage.getItem('datamart_token');
+      if (token && !axios.defaults.headers.common.Authorization) {
+        axios.defaults.headers.common.Authorization = `Bearer ${token}`;
+      }
 
-    const fetchBasket = () =>
-      axios.get(`${API_BASE_URL}/api/analytics/market-basket`)
-        .then(res => setMarketBasket(res.data))
-        .catch(() => {});
+      try {
+        const [prodRes, basketRes, datasetRes] = await Promise.all([
+          axios.get(`${API_BASE_URL}/api/products`).catch(() => ({ data: [] })),
+          axios.get(`${API_BASE_URL}/api/analytics/market-basket`).catch(() => ({ data: [] })),
+          axios.get(`${API_BASE_URL}/api/dataset/info`).catch(() => ({ data: { files: [] } })),
+        ]);
 
-    fetchProducts();
-    fetchBasket();
+        if (!isMounted) return;
+
+        const prodData = prodRes.data || [];
+        setProducts(prodData);
+
+        // Build unique categories dynamically from real dataset
+        const cats = ['All', ...new Set(prodData.map(p => p.category).filter(Boolean))];
+        setCategories(cats);
+
+        setMarketBasket(basketRes.data || []);
+
+        const files = datasetRes.data?.files || [];
+        if (files.length > 0) {
+          const currentFile = files[files.length - 1].name;
+          setActiveDataset(currentFile);
+          localStorage.setItem('datamart_active_dataset', currentFile);
+        } else {
+          const saved = localStorage.getItem('datamart_active_dataset');
+          setActiveDataset(saved || null);
+        }
+      } catch (err) {
+        console.error('Failed to load storefront data:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    fetchData();
+    return () => { isMounted = false; };
   }, []);
 
+  // Currency resolution based on dataset
+  const currencyInfo = useMemo(() => getDatasetCurrency(activeDataset), [activeDataset]);
+  const currencySymbol = currencyInfo.symbol;
+
+  // Apriori Recommendation Lookup
   const getRecommendation = (productName) => {
-    if (!marketBasket.length) return null;
-    const rule = marketBasket.find(r => r.rule.toLowerCase().includes(productName.toLowerCase()));
-    if (rule) return rule.rule.split(' -> ')[1];
+    if (!marketBasket.length || !productName) return null;
+    const lower = productName.toLowerCase();
+    const rule = marketBasket.find(r => r.rule && r.rule.toLowerCase().includes(lower));
+    if (rule && rule.rule.includes(' -> ')) {
+      const parts = rule.rule.split(' -> ');
+      return {
+        item: parts[1] || parts[0],
+        lift: rule.lift ? `${rule.lift.toFixed(1)}x` : null,
+        confidence: rule.confidence ? `${(rule.confidence * 100).toFixed(0)}%` : null
+      };
+    }
     return null;
   };
 
-  const simulateTransaction = async (product) => {
-    setTxState(prev => ({ ...prev, [product.id]: { status: 'loading' } }));
-    try {
-      const res = await axios.post(`${API_BASE_URL}/api/transaction`, {
-        product_id: product.id,
-        product_name: product.name,
-        quantity: 1,
-        amount: product.price
-      });
-      const { order_id } = res.data;
-      setTxState(prev => ({
-        ...prev,
-        [product.id]: { status: 'success', message: `Order ${order_id} placed successfully.` }
-      }));
-    } catch (err) {
-      const errMsg = err.response?.data?.error || err.message;
-      setTxState(prev => ({ ...prev, [product.id]: { status: 'error', message: errMsg } }));
-    }
-    // Clear after 4 seconds
-    setTimeout(() => setTxState(prev => { const n = { ...prev }; delete n[product.id]; return n; }), 4000);
+  // Quantity handling
+  const getQuantity = (id) => quantities[id] || 1;
+  const setQuantity = (id, delta) => {
+    setQuantities(prev => {
+      const current = prev[id] || 1;
+      const next = Math.max(1, Math.min(99, current + delta));
+      return { ...prev, [id]: next };
+    });
   };
 
-  const filteredProducts = products.filter(p =>
-    p.name.toLowerCase().includes(search.toLowerCase()) &&
-    (activeCategory === 'All' || p.category === activeCategory)
-  );
+  // 1-Click Purchase & OLTP Database Write
+  const simulateTransaction = async (product) => {
+    const qty = getQuantity(product.id);
+    const totalAmount = (Number(product.price) || 0) * qty;
+
+    setTxState(prev => ({ ...prev, [product.id]: { status: 'loading' } }));
+
+    try {
+      const res = await axios.post(`${API_BASE_URL}/api/transaction`, {
+        product_id: String(product.id),
+        product_name: product.name,
+        quantity: qty,
+        amount: totalAmount
+      });
+
+      const { order_id, message, simulated } = res.data;
+
+      setTxState(prev => ({
+        ...prev,
+        [product.id]: {
+          status: 'success',
+          order_id,
+          message: simulated ? `Simulated order ${order_id}` : `Order ${order_id} committed to OLTP DB`
+        }
+      }));
+
+      // Add to recent orders tray
+      setRecentOrders(prev => [
+        {
+          id: order_id,
+          productName: product.name,
+          quantity: qty,
+          amount: totalAmount,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          simulated: !!simulated
+        },
+        ...prev.slice(0, 4)
+      ]);
+    } catch (err) {
+      const errMsg = err.response?.data?.error || err.response?.data?.detail || err.message;
+      setTxState(prev => ({
+        ...prev,
+        [product.id]: { status: 'error', message: errMsg }
+      }));
+    }
+
+    // Auto dismiss status after 5 seconds
+    setTimeout(() => {
+      setTxState(prev => {
+        const next = { ...prev };
+        delete next[product.id];
+        return next;
+      });
+    }, 5000);
+  };
+
+  // Search, Filter & Sort Logic
+  const filteredAndSortedProducts = useMemo(() => {
+    let result = products.filter(p => {
+      const matchesSearch = !search.trim() || p.name.toLowerCase().includes(search.toLowerCase()) || String(p.id).toLowerCase().includes(search.toLowerCase());
+      const matchesCategory = activeCategory === 'All' || p.category === activeCategory;
+      return matchesSearch && matchesCategory;
+    });
+
+    switch (sortBy) {
+      case 'price-asc':
+        result.sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
+        break;
+      case 'price-desc':
+        result.sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0));
+        break;
+      case 'name-asc':
+        result.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      case 'name-desc':
+        result.sort((a, b) => b.name.localeCompare(a.name));
+        break;
+      default:
+        // 'default' - preserve original dataset catalog order
+        break;
+    }
+
+    return result;
+  }, [products, search, activeCategory, sortBy]);
+
+  const resetFilters = () => {
+    setSearch('');
+    setActiveCategory('All');
+    setSortBy('default');
+  };
 
   return (
     <motion.div className="container" initial="initial" animate="in" exit="out" variants={pageVariants}>
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-        <div>
-          <h1>My Store</h1>
-          <p>
-            Shop for products and see smart recommendations.
-            {products.length > 0 && (
-              <span style={{ marginLeft: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                {products.length} products from your dataset
-              </span>
-            )}
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <div style={{ position: 'relative' }}>
-            <Search size={18} style={{ position: 'absolute', left: 12, top: 10, color: 'var(--text-muted)' }} />
-            <input
-              type="text"
-              placeholder="Search products..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)', color: 'white', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '8px', outline: 'none' }}
-            />
+      <div className="storefront-layout">
+
+        {/* ── Section A: Storefront Page Header ────────────────────────────── */}
+        <PageHeader
+          title="Storefront"
+          subtitle="Enterprise transactional e-commerce catalog connected to active warehouse analytics."
+          badge={
+            activeDataset ? (
+              <Badge variant="success" withDot>
+                {activeDataset} {currencyInfo.code ? `(${currencyInfo.code})` : ''}
+              </Badge>
+            ) : (
+              <Badge variant="warning" withDot>
+                No active dataset loaded
+              </Badge>
+            )
+          }
+          actions={
+            <Button
+              variant="outline"
+              size="sm"
+              icon={<ArrowRight size={14} />}
+              iconPosition="right"
+              onClick={() => navigate('/dashboard')}
+            >
+              Go to Dashboard
+            </Button>
+          }
+        />
+
+        {/* ── Section B: Hero Banner ───────────────────────────────────────── */}
+        <div className="storefront-hero">
+          <div className="storefront-hero__content">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Badge variant="purple" size="sm" icon={<Store size={12} />}>
+                OLTP Transactional Store
+              </Badge>
+              {currencyInfo.code && (
+                <Badge variant="default" size="sm">
+                  Currency: {currencyInfo.code}
+                </Badge>
+              )}
+            </div>
+
+            <h2 className="storefront-hero__title">
+              Enterprise Product Catalog & OLTP Showcase
+            </h2>
+
+            <p className="storefront-hero__desc">
+              Browse products dynamically loaded from your active data warehouse dataset. Every order simulates real-time OLTP database transactions that synchronize through the data cleaner and reflect in analytics.
+            </p>
+
+            <div className="storefront-hero__stats">
+              <div className="storefront-stat-pill">
+                <Package size={14} color="#4F46E5" />
+                <span>Catalog Size: <strong>{products.length} Items</strong></span>
+              </div>
+              <div className="storefront-stat-pill">
+                <Tag size={14} color="#0284C7" />
+                <span>Categories: <strong>{Math.max(0, categories.length - 1)} Active</strong></span>
+              </div>
+              <div className="storefront-stat-pill">
+                <TrendingUp size={14} color="#10B981" />
+                <span>Cross-Sell Intelligence: <strong>{marketBasket.length} Rules</strong></span>
+              </div>
+            </div>
           </div>
-          {/* Dynamic category dropdown — built from the actual loaded dataset */}
-          <select
-            value={activeCategory}
-            onChange={(e) => setActiveCategory(e.target.value)}
-            style={{ background: 'var(--bg-secondary)', color: 'white', border: '1px solid var(--glass-border)', padding: '0.5rem', borderRadius: '8px', outline: 'none' }}
-          >
-            {categories.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
         </div>
-      </div>
 
-      {loading ? (
-        <div className="dashboard-grid">
-          {[1, 2, 3, 4, 5, 6].map(i => (
-            <div key={i} className="skeleton" style={{ height: '220px' }}></div>
-          ))}
-        </div>
-      ) : products.length === 0 ? (
-        /* No products at all — user hasn't run ETL yet */
-        <motion.div
-          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-          style={{ textAlign: 'center', padding: '5rem 2rem' }}
-        >
-          <Package size={56} color="var(--text-muted)" style={{ marginBottom: '1.5rem', opacity: 0.4 }} />
-          <h2 style={{ color: 'var(--text-muted)', marginBottom: '0.75rem' }}>No Products Yet</h2>
-          <p style={{ color: 'var(--text-muted)', maxWidth: 400, margin: '0 auto 2rem' }}>
-            Your store will automatically show products from your dataset after you run the <strong>Data Cleaner</strong> pipeline.
-          </p>
-          <a href="/etl" style={{ textDecoration: 'none' }}>
-            <button className="btn btn-primary">Go to Data Cleaner →</button>
-          </a>
-        </motion.div>
-      ) : filteredProducts.length === 0 ? (
-        <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '4rem', fontSize: '1rem' }}>
-          No products found for "{search}" in {activeCategory}.
-        </div>
-      ) : (
-        <motion.div className="dashboard-grid" variants={containerVariants} initial="hidden" animate="show">
-          {filteredProducts.map((product) => {
-            const recommendation = getRecommendation(product.name);
-            const tx = txState[product.id];
-            return (
-              <motion.div key={product.id} className="glass-panel" variants={itemVariants} style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ flex: 1 }}>
-                  <span style={{ background: 'rgba(99,102,241,0.2)', color: 'var(--accent-primary)', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: '600', marginBottom: '1rem', display: 'inline-block' }}>
-                    {product.category}
+        {/* ── Section G (Auxiliary): Recent Transactions Tray ──────────────── */}
+        {recentOrders.length > 0 && (
+          <div className="recent-orders-bar">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+              <CheckCircle2 size={16} color="#10B981" />
+              <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Recent OLTP Transactions:
+              </span>
+            </div>
+
+            <div className="recent-orders-list">
+              {recentOrders.map((ord) => (
+                <div key={ord.id} className="recent-order-chip">
+                  <span style={{ fontWeight: 600, color: '#4F46E5', fontFamily: 'monospace' }}>
+                    {ord.id}
                   </span>
-                  <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem', fontFamily: 'Outfit', textTransform: 'capitalize', lineHeight: 1.4 }}>
-                    {product.name.length > 40 ? product.name.substring(0, 40) + '…' : product.name}
-                  </h3>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1rem' }}>
-                    ID: {product.id}
-                  </p>
+                  <span style={{ color: 'var(--text-secondary)' }}>
+                    {ord.productName.length > 20 ? ord.productName.substring(0, 20) + '…' : ord.productName}
+                  </span>
+                  <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {formatCurrency(ord.amount, currencySymbol)}
+                  </span>
+                  <span style={{ color: 'var(--text-tertiary)', fontSize: '0.6875rem' }}>
+                    {ord.time}
+                  </span>
+                </div>
+              ))}
+            </div>
 
-                  {recommendation && (
-                    <div style={{ background: 'linear-gradient(90deg, rgba(16,185,129,0.1), transparent)', borderLeft: '3px solid #10B981', padding: '8px 12px', borderRadius: '0 4px 4px 0', fontSize: '0.82rem', marginBottom: '0.5rem' }}>
-                      <TrendingUp size={13} style={{ display: 'inline', color: '#10B981', marginRight: 4 }} />
-                      <span style={{ color: 'var(--text-muted)' }}>Frequently Bought Together:</span><br />
-                      <strong style={{ color: '#10B981' }}>
-                        {recommendation.length > 45 ? recommendation.substring(0, 45) + '…' : recommendation}
-                      </strong>
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<RotateCcw size={12} />}
+              onClick={() => setRecentOrders([])}
+              title="Clear recent orders tray"
+              style={{ padding: '4px 8px', height: '28px', color: 'var(--text-tertiary)' }}
+            >
+              Clear
+            </Button>
+          </div>
+        )}
+
+        {/* ── Section D: Search, Category Filter & Sorting Controls ────────── */}
+        <div className="storefront-controls">
+          <div className="storefront-controls__left">
+            {/* Search Box */}
+            <div className="storefront-search-box">
+              <Search size={16} className="storefront-search-box__icon" />
+              <input
+                type="text"
+                placeholder="Search products or SKU ID..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="storefront-search-box__input"
+              />
+              {search && (
+                <button
+                  type="button"
+                  className="storefront-search-box__clear"
+                  onClick={() => setSearch('')}
+                  title="Clear search"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            {/* Category Select */}
+            <div style={{ minWidth: 160 }}>
+              <select
+                value={activeCategory}
+                onChange={(e) => setActiveCategory(e.target.value)}
+                style={{
+                  height: 40, width: '100%',
+                  padding: '0 0.75rem',
+                  backgroundColor: 'var(--surface-card)',
+                  border: '1px solid var(--border-default)',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.875rem',
+                  outline: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                {categories.map(cat => (
+                  <option key={cat} value={cat}>
+                    {cat === 'All' ? 'All Categories' : cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="storefront-controls__right">
+            {/* Sort Select */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <SlidersHorizontal size={14} color="#64748B" />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                style={{
+                  height: 40,
+                  padding: '0 0.75rem',
+                  backgroundColor: 'var(--surface-card)',
+                  border: '1px solid var(--border-default)',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.875rem',
+                  outline: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="default">Featured Catalog</option>
+                <option value="price-asc">Price: Low to High</option>
+                <option value="price-desc">Price: High to Low</option>
+                <option value="name-asc">Alphabetical: A to Z</option>
+                <option value="name-desc">Alphabetical: Z to A</option>
+              </select>
+            </div>
+
+            {/* Results Counter / Reset */}
+            <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+              {filteredAndSortedProducts.length} {filteredAndSortedProducts.length === 1 ? 'item' : 'items'}
+            </div>
+
+            {(search || activeCategory !== 'All' || sortBy !== 'default') && (
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<X size={13} />}
+                onClick={resetFilters}
+                style={{ height: 32 }}
+              >
+                Reset
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* ── Section C & F: Product Catalog Grid & Cross-Sell Recommendations */}
+        {loading ? (
+          <div className="storefront-grid">
+            {[1, 2, 3, 4, 5, 6].map(i => (
+              <div key={i} className="product-card" style={{ gap: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Skeleton variant="text" width="80px" />
+                  <Skeleton variant="text" width="60px" />
+                </div>
+                <Skeleton variant="text" count={2} />
+                <Skeleton variant="rectangular" height="40px" />
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 'auto', paddingTop: '1rem' }}>
+                  <Skeleton variant="text" width="70px" />
+                  <Skeleton variant="rectangular" width="90px" height="32px" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : products.length === 0 ? (
+          /* Empty Catalog: No dataset processed yet */
+          <Card>
+            <EmptyState
+              title="No Products in Catalog"
+              description="Your store will dynamically reflect products from your dataset once you execute the ETL Pipeline."
+              action={
+                <Button
+                  variant="primary"
+                  icon={<ArrowRight size={14} />}
+                  iconPosition="right"
+                  onClick={() => navigate('/etl')}
+                >
+                  Go to ETL Pipeline
+                </Button>
+              }
+            />
+          </Card>
+        ) : filteredAndSortedProducts.length === 0 ? (
+          /* Empty Search / Filter Results */
+          <Card>
+            <EmptyState
+              title="No Matching Products Found"
+              description={`We couldn't find any products matching "${search}" in ${activeCategory}. Try adjusting your filters.`}
+              action={
+                <Button variant="outline" onClick={resetFilters}>
+                  Clear All Filters
+                </Button>
+              }
+            />
+          </Card>
+        ) : (
+          /* Product Catalog Grid */
+          <motion.div
+            className="storefront-grid"
+            variants={containerVariants}
+            initial="hidden"
+            animate="show"
+          >
+            {filteredAndSortedProducts.map((product) => {
+              const recommendation = getRecommendation(product.name);
+              const tx = txState[product.id];
+              const qty = getQuantity(product.id);
+
+              return (
+                <motion.div
+                  key={product.id}
+                  className="product-card"
+                  variants={itemVariants}
+                >
+                  <div>
+                    {/* Header: Category Badge and SKU */}
+                    <div className="product-card__header">
+                      <Badge variant="purple" size="sm">
+                        {product.category || 'General'}
+                      </Badge>
+                      <span className="product-card__sku" title="Product SKU Identifier">
+                        SKU: {product.id}
+                      </span>
                     </div>
-                  )}
 
-                  <AnimatePresence>
-                    {tx && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        style={{ overflow: 'hidden', marginTop: '0.5rem' }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', background: tx.status === 'success' ? 'rgba(16,185,129,0.1)' : tx.status === 'error' ? 'rgba(239,68,68,0.1)' : 'rgba(99,102,241,0.1)', border: `1px solid ${tx.status === 'success' ? 'rgba(16,185,129,0.3)' : tx.status === 'error' ? 'rgba(239,68,68,0.3)' : 'rgba(99,102,241,0.3)'}`, borderRadius: '6px', padding: '0.6rem 0.8rem', fontSize: '0.78rem' }}>
-                          {tx.status === 'success'
-                            ? <CheckCircle size={13} color="#10B981" style={{ flexShrink: 0, marginTop: 1 }} />
-                            : tx.status === 'error'
-                              ? <AlertCircle size={13} color="#ef4444" style={{ flexShrink: 0, marginTop: 1 }} />
-                              : <span style={{ width: 13, height: 13, border: '2px solid #6366f1', borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.6s linear infinite', flexShrink: 0 }} />
-                          }
-                          <span style={{ color: tx.status === 'success' ? '#10B981' : tx.status === 'error' ? '#ef4444' : '#6366f1' }}>
-                            {tx.status === 'loading' ? 'Processing order...' : tx.message}
-                          </span>
+                    {/* Product Name */}
+                    <h3 className="product-card__title" title={product.name}>
+                      {product.name}
+                    </h3>
+
+                    {/* Apriori Cross-Sell Recommendation Section */}
+                    {recommendation && (
+                      <div className="product-card__cross-sell">
+                        <div className="product-card__cross-sell-label">
+                          <TrendingUp size={12} color="#10B981" />
+                          <span>Frequently Bought Together</span>
+                          {recommendation.lift && (
+                            <span style={{ marginLeft: 'auto', color: '#10B981', fontSize: '0.65rem' }}>
+                              {recommendation.lift} Lift
+                            </span>
+                          )}
                         </div>
-                      </motion.div>
+                        <div className="product-card__cross-sell-item" title={recommendation.item}>
+                          {recommendation.item}
+                        </div>
+                      </div>
                     )}
-                  </AnimatePresence>
-                </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem' }}>
-                  <div style={{ fontSize: '1.4rem', fontWeight: '700', color: 'var(--text-main)' }}>
-                    ₹{product.price?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    {/* Transaction Feedback Notification */}
+                    <AnimatePresence>
+                      {tx && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          style={{ overflow: 'hidden' }}
+                        >
+                          <div className={`product-card__tx-result ${
+                            tx.status === 'success'
+                              ? 'product-card__tx-result--success'
+                              : tx.status === 'error'
+                                ? 'product-card__tx-result--error'
+                                : 'product-card__tx-result--loading'
+                          }`}>
+                            {tx.status === 'success' && <CheckCircle2 size={14} style={{ flexShrink: 0 }} />}
+                            {tx.status === 'error' && <AlertCircle size={14} style={{ flexShrink: 0 }} />}
+                            {tx.status === 'loading' && (
+                              <div className="ui-btn__spinner" style={{ width: 12, height: 12, border: '2px solid rgba(79, 70, 229, 0.3)', borderTopColor: '#4F46E5', borderRadius: '50%' }} />
+                            )}
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {tx.status === 'loading' ? 'Committing order to OLTP DB...' : tx.message}
+                            </span>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
-                  <button
-                    className="btn btn-primary"
-                    style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}
-                    onClick={() => simulateTransaction(product)}
-                    disabled={tx?.status === 'loading'}
-                  >
-                    <ShoppingCart size={16} /> Buy Item
-                  </button>
-                </div>
-              </motion.div>
-            );
-          })}
-        </motion.div>
-      )}
+
+                  {/* Card Footer: Price, Quantity & Purchase Action */}
+                  <div className="product-card__footer">
+                    <div>
+                      <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Unit Price
+                      </div>
+                      <div className="product-card__price">
+                        {formatCurrency(product.price, currencySymbol)}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      {/* Quantity Stepper */}
+                      <div style={{
+                        display: 'flex', alignItems: 'center',
+                        border: '1px solid var(--border-default)',
+                        borderRadius: 'var(--radius-md)',
+                        backgroundColor: 'var(--surface-subtle)',
+                        overflow: 'hidden', height: 36
+                      }}>
+                        <button
+                          type="button"
+                          onClick={() => setQuantity(product.id, -1)}
+                          disabled={qty <= 1 || tx?.status === 'loading'}
+                          style={{
+                            width: 26, height: '100%', border: 'none', background: 'none',
+                            cursor: qty <= 1 ? 'not-allowed' : 'pointer',
+                            color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '0.9rem', fontWeight: 600
+                          }}
+                        >
+                          –
+                        </button>
+                        <span style={{
+                          padding: '0 6px', fontSize: '0.8125rem', fontWeight: 600,
+                          color: 'var(--text-primary)', minWidth: 20, textAlign: 'center'
+                        }}>
+                          {qty}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setQuantity(product.id, 1)}
+                          disabled={qty >= 99 || tx?.status === 'loading'}
+                          style={{
+                            width: 26, height: '100%', border: 'none', background: 'none',
+                            cursor: qty >= 99 ? 'not-allowed' : 'pointer',
+                            color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '0.9rem', fontWeight: 600
+                          }}
+                        >
+                          +
+                        </button>
+                      </div>
+
+                      {/* Buy Button */}
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        icon={<ShoppingCart size={14} />}
+                        onClick={() => simulateTransaction(product)}
+                        loading={tx?.status === 'loading'}
+                        disabled={tx?.status === 'loading'}
+                        title={`Place order for ${qty} x ${product.name}`}
+                        style={{ height: 36 }}
+                      >
+                        Order Item
+                      </Button>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </motion.div>
+        )}
+
+      </div>
     </motion.div>
   );
 }
