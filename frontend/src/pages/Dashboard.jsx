@@ -6,29 +6,36 @@ import {
   Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
   BarChart, Bar, PieChart, Pie, Cell
 } from 'recharts';
-// JSX member expressions from Framer Motion are not recognized by the ESLint parser.
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Download, Sparkles, MessageCircle, Send, X, Trophy, Globe, ArrowRight } from 'lucide-react';
+import {
+  Download,
+  Sparkles,
+  MessageCircle,
+  Send,
+  X,
+  Trophy,
+  Globe,
+  ArrowRight,
+  RefreshCw,
+  TrendingUp,
+  ShoppingBag,
+  CreditCard,
+  Layers,
+  CheckCircle2,
+  AlertCircle
+} from 'lucide-react';
+import { Card, Button, Badge, Skeleton, EmptyState } from '../components/common';
+import MetricCard from '../components/dashboard/MetricCard';
 
 const pageVariants = {
-  initial: { opacity: 0, y: 20 },
+  initial: { opacity: 0, y: 12 },
   in: { opacity: 1, y: 0 },
-  out: { opacity: 0, y: -20 }
+  out: { opacity: 0, y: -12 }
 };
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.08 } }
-};
-
-const itemVariants = {
-  hidden: { opacity: 0, scale: 0.95 },
-  show: { opacity: 1, scale: 1 }
-};
-
-const COLORS = ['#6366f1', '#ec4899', '#10B981', '#f59e0b', '#38bdf8', '#a78bfa'];
+const CHART_COLORS = ['#4F46E5', '#10B981', '#F59E0B', '#0284C7', '#8B5CF6', '#EC4899'];
 const MOCK_CLUSTERS = [
   { Segment: 'Low Value', Avg_Recency: 153, Avg_Frequency: 1.2, Avg_Monetary: 24150, Customer_Count: 2150 },
   { Segment: 'Mid Value', Avg_Recency: 45, Avg_Frequency: 5.4, Avg_Monetary: 152250, Customer_Count: 1540 },
@@ -56,7 +63,26 @@ function downloadCSV(data, filename) {
   window.URL.revokeObjectURL(url);
 }
 
-// ── AI Chat Widget (RAG + Text-to-SQL) ───────────────────────────────────────
+// ── Custom Clean White Recharts Tooltip ──────────────────────────────────────
+function CustomChartTooltip({ active, payload, label, formatter }) {
+  if (!active || !payload || !payload.length) return null;
+  return (
+    <div className="recharts-custom-tooltip">
+      {label && <div className="recharts-custom-tooltip__label">{label}</div>}
+      {payload.map((entry, index) => {
+        const valFormatted = formatter ? formatter(entry.value, entry.name, entry) : `₹${entry.value?.toLocaleString()}`;
+        return (
+          <div key={`item-${index}`} className="recharts-custom-tooltip__item" style={{ color: entry.color || '#0F172A' }}>
+            <span style={{ fontWeight: 500, marginRight: 6 }}>{entry.name}:</span>
+            <span style={{ fontWeight: 700 }}>{valFormatted}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── AI Chat Widget (RAG + Text-to-SQL) — Fully Preserved ─────────────────────
 const SUGGESTED = [
   { label: 'Top 5 products?', q: 'What are the top 5 products by revenue?' },
   { label: 'Nov 2011 sales?', q: 'What was total revenue in November 2011?' },
@@ -64,7 +90,7 @@ const SUGGESTED = [
   { label: 'Best country?',   q: 'Which country has the highest total sales?' },
 ];
 
-function IntentBadge({ intent, source }) {
+function IntentBadge({ intent }) {
   if (!intent) return null;
   const isSQL = intent === 'data';
   return (
@@ -73,7 +99,7 @@ function IntentBadge({ intent, source }) {
       fontSize: '0.65rem', fontFamily: 'monospace', fontWeight: 700,
       padding: '2px 7px', borderRadius: 20,
       background: isSQL ? 'rgba(16,185,129,0.12)' : 'rgba(139,92,246,0.15)',
-      color: isSQL ? '#10B981' : '#a78bfa',
+      color: isSQL ? '#10B981' : '#8B5CF6',
       border: `1px solid ${isSQL ? 'rgba(16,185,129,0.3)' : 'rgba(139,92,246,0.3)'}`,
       marginBottom: 4,
     }}>
@@ -88,7 +114,7 @@ function SQLBlock({ sql }) {
   return (
     <div style={{ marginTop: 6 }}>
       <button onClick={() => setShow(s => !s)} style={{
-        fontSize: '0.68rem', color: '#64748b', background: 'none',
+        fontSize: '0.68rem', color: '#64748B', background: 'none',
         border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline'
       }}>
         {show ? 'Hide SQL ▲' : 'Show SQL ▼'}
@@ -96,10 +122,10 @@ function SQLBlock({ sql }) {
       {show && (
         <pre style={{
           marginTop: 4, padding: '0.5rem 0.6rem',
-          background: '#0d1117', borderRadius: 6,
-          fontSize: '0.68rem', color: '#38bdf8', fontFamily: 'monospace',
+          background: '#0F172A', borderRadius: 6,
+          fontSize: '0.68rem', color: '#38BDF8', fontFamily: 'monospace',
           overflowX: 'auto', whiteSpace: 'pre-wrap',
-          border: '1px solid rgba(56,189,248,0.15)', maxHeight: 140
+          border: '1px solid rgba(56,189,248,0.2)', maxHeight: 140
         }}>{sql}</pre>
       )}
     </div>
@@ -115,8 +141,8 @@ function RowsTable({ rows, columns }) {
         <thead>
           <tr>
             {cols.map(c => (
-              <th key={c} style={{ padding: '3px 6px', borderBottom: '1px solid rgba(255,255,255,0.1)',
-                color: '#64748b', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              <th key={c} style={{ padding: '3px 6px', borderBottom: '1px solid #E2E8F0',
+                color: '#64748B', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 {c}
               </th>
             ))}
@@ -127,7 +153,7 @@ function RowsTable({ rows, columns }) {
             <tr key={i}>
               {cols.map(c => (
                 <td key={c} style={{ padding: '3px 6px', borderBottom: i < rows.length - 1
-                  ? '1px solid rgba(255,255,255,0.04)' : 'none', color: 'var(--text-main)' }}>
+                  ? '1px solid #F1F5F9' : 'none', color: '#0F172A' }}>
                   {row[c] != null ? String(row[c]) : '—'}
                 </td>
               ))}
@@ -136,7 +162,7 @@ function RowsTable({ rows, columns }) {
         </tbody>
       </table>
       {rows.length > 6 && (
-        <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: 3 }}>
+        <div style={{ fontSize: '0.65rem', color: '#64748B', marginTop: 3 }}>
           …and {rows.length - 6} more rows
         </div>
       )}
@@ -145,15 +171,15 @@ function RowsTable({ rows, columns }) {
 }
 
 function AIChatWidget() {
-  const [open, setOpen]       = useState(false);
+  const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([{
     role: 'ai',
     text: "Hi! I'm your AI analyst powered by RAG + Text-to-SQL.\n\nAsk me a data question (\"top 5 products by revenue?\") and I'll query the database. Ask a concept question (\"what is OLAP?\") and I'll search the knowledge base.",
     intent: null, sql: null, rows: [], columns: []
   }]);
-  const [input, setInput]     = useState('');
+  const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
-  const bottomRef             = useRef(null);
+  const bottomRef = useRef(null);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
@@ -165,12 +191,11 @@ function AIChatWidget() {
     setMessages(prev => [...prev, userMsg]);
     setThinking(true);
 
-    // Build history array for the API (last 8 messages)
     const history = messages.slice(-8).map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', text: m.text }));
 
     try {
       const res = await axios.post(`${API_BASE_URL}/api/chat`, { message: msg, history });
-      const d   = res.data;
+      const d = res.data;
       setMessages(prev => [...prev, {
         role: 'ai',
         text: d.answer || d.response || 'No answer.',
@@ -188,23 +213,24 @@ function AIChatWidget() {
 
   return (
     <>
-      {/* Floating button */}
-      <motion.button
-        whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}
+      <button
         onClick={() => setOpen(o => !o)}
+        aria-label="Open AI Business Analyst"
         style={{
           position: 'fixed', bottom: '2rem', right: '2rem', zIndex: 1000,
           width: 56, height: 56, borderRadius: '50%',
-          background: 'linear-gradient(135deg, #6366f1, #ec4899)',
+          backgroundColor: '#4F46E5',
           border: 'none', cursor: 'pointer', display: 'flex',
           alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 8px 32px rgba(99,102,241,0.5)'
+          boxShadow: '0 8px 24px rgba(79,70,229,0.35)',
+          transition: 'transform 0.15s ease'
         }}
+        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
+        onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
       >
         {open ? <X size={22} color="white" /> : <MessageCircle size={22} color="white" />}
-      </motion.button>
+      </button>
 
-      {/* Chat panel */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -213,82 +239,80 @@ function AIChatWidget() {
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             style={{
               position: 'fixed', bottom: '6rem', right: '2rem', zIndex: 999,
-              width: 400, background: 'rgba(13,15,23,0.97)',
-              border: '1px solid rgba(99,102,241,0.3)', borderRadius: 16,
-              overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
+              width: 400, backgroundColor: '#FFFFFF',
+              border: '1px solid #E2E8F0', borderRadius: 16,
+              overflow: 'hidden', boxShadow: '0 20px 40px rgba(15,23,42,0.18)',
               display: 'flex', flexDirection: 'column', maxHeight: '80vh'
             }}
           >
             {/* Header */}
-            <div style={{ padding: '0.9rem 1.25rem', background: 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(236,72,153,0.1))', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
-              <Sparkles size={16} color="#ec4899" />
+            <div style={{ padding: '0.9rem 1.25rem', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+              <Sparkles size={18} color="#4F46E5" />
               <div>
-                <span style={{ fontWeight: 700, color: '#a5b4fc', fontSize: '0.9rem' }}>DataMart AI Analyst</span>
-                <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: 1 }}>RAG + Text-to-SQL · Groq LLaMA-3</div>
+                <span style={{ fontWeight: 600, color: '#0F172A', fontSize: '0.9rem' }}>DataMart AI Analyst</span>
+                <div style={{ fontSize: '0.6875rem', color: '#64748B', marginTop: 1 }}>RAG + Text-to-SQL · Groq LLM</div>
               </div>
-              <span style={{ marginLeft: 'auto', fontSize: '0.7rem', background: 'rgba(16,185,129,0.15)', color: '#10B981', padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>● Live</span>
+              <span style={{ marginLeft: 'auto', fontSize: '0.6875rem', background: '#ECFDF5', color: '#059669', border: '1px solid #A7F3D0', padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>● Online</span>
             </div>
 
             {/* Messages */}
-            <div style={{ padding: '1rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div style={{ padding: '1rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem', backgroundColor: '#FFFFFF' }}>
               {messages.map((m, i) => (
-                <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                  style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '90%' }}
-                >
-                  {m.role === 'ai' && m.intent && <IntentBadge intent={m.intent} source={m.source} />}
+                <div key={i} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '90%' }}>
+                  {m.role === 'ai' && m.intent && <IntentBadge intent={m.intent} />}
                   <div style={{
                     padding: '0.65rem 0.9rem',
                     borderRadius: m.role === 'user' ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
-                    background: m.role === 'user' ? 'linear-gradient(135deg,#6366f1,#ec4899)' : 'rgba(255,255,255,0.05)',
-                    fontSize: '0.87rem', lineHeight: 1.55, color: 'var(--text-main)',
-                    border: m.role === 'ai' ? '1px solid rgba(255,255,255,0.07)' : 'none',
+                    backgroundColor: m.role === 'user' ? '#4F46E5' : '#F1F5F9',
+                    color: m.role === 'user' ? '#FFFFFF' : '#0F172A',
+                    fontSize: '0.875rem', lineHeight: 1.5,
+                    border: m.role === 'ai' ? '1px solid #E2E8F0' : 'none',
                     whiteSpace: 'pre-wrap'
                   }}>
                     {m.text}
                   </div>
                   {m.role === 'ai' && <SQLBlock sql={m.sql} />}
                   {m.role === 'ai' && <RowsTable rows={m.rows} columns={m.columns} />}
-                </motion.div>
+                </div>
               ))}
               {thinking && (
-                <div style={{ alignSelf: 'flex-start', display: 'flex', gap: 6, alignItems: 'center' }}>
-                  {[0,1,2].map(d => (
-                    <motion.span key={d} animate={{ opacity: [0.3,1,0.3] }}
-                      transition={{ duration: 1.2, repeat: Infinity, delay: d * 0.2 }}
-                      style={{ width: 7, height: 7, borderRadius: '50%', background: '#6366f1', display: 'inline-block' }}
-                    />
-                  ))}
+                <div style={{ alignSelf: 'flex-start', display: 'flex', gap: 6, alignItems: 'center', padding: '0.5rem' }}>
+                  <div className="ui-btn__spinner" style={{ width: 16, height: 16, border: '2px solid #E2E8F0', borderTopColor: '#4F46E5', borderRadius: '50%' }} />
+                  <span style={{ fontSize: '0.75rem', color: '#64748B' }}>Querying database...</span>
                 </div>
               )}
               <div ref={bottomRef} />
             </div>
 
             {/* Suggested questions */}
-            <div style={{ padding: '0 1rem 0.6rem', display: 'flex', gap: '0.35rem', flexWrap: 'wrap', flexShrink: 0 }}>
+            <div style={{ padding: '0 1rem 0.6rem', display: 'flex', gap: '0.35rem', flexWrap: 'wrap', flexShrink: 0, backgroundColor: '#FFFFFF' }}>
               {SUGGESTED.map(s => (
                 <button key={s.q} onClick={() => send(s.q)}
-                  style={{ fontSize: '0.7rem', padding: '3px 9px', background: 'rgba(99,102,241,0.08)',
-                    border: '1px solid rgba(99,102,241,0.25)', borderRadius: 20, color: '#94a3b8', cursor: 'pointer' }}>
+                  style={{ fontSize: '0.6875rem', padding: '3px 8px', background: '#F8FAFC',
+                    border: '1px solid #E2E8F0', borderRadius: 20, color: '#475569', cursor: 'pointer', transition: 'background 0.15s ease' }}
+                  onMouseEnter={e => e.currentTarget.style.backgroundColor = '#EEF2FF'}
+                  onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                >
                   {s.label}
                 </button>
               ))}
             </div>
 
-            {/* Input */}
-            <div style={{ padding: '0.75rem 1rem', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+            {/* Input Box */}
+            <div style={{ padding: '0.75rem 1rem', borderTop: '1px solid #E2E8F0', display: 'flex', gap: '0.5rem', flexShrink: 0, backgroundColor: '#F8FAFC' }}>
               <input
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && send()}
                 placeholder="Ask about data or concepts..."
-                style={{ flex: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: 8, padding: '0.5rem 0.75rem', color: 'white', fontSize: '0.88rem', outline: 'none' }}
+                style={{ flex: 1, backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0',
+                  borderRadius: 8, padding: '0.5rem 0.75rem', color: '#0F172A', fontSize: '0.875rem', outline: 'none' }}
               />
               <button onClick={() => send()} disabled={thinking || !input.trim()}
-                style={{ background: thinking ? 'rgba(99,102,241,0.4)' : 'linear-gradient(135deg,#6366f1,#ec4899)',
+                style={{ backgroundColor: thinking ? '#CBD5E1' : '#4F46E5',
                   border: 'none', borderRadius: 8, padding: '0.5rem 0.75rem', cursor: thinking ? 'not-allowed' : 'pointer',
-                  display: 'flex', alignItems: 'center', transition: 'background 0.2s' }}>
-                <Send size={15} color="white" />
+                  display: 'flex', alignItems: 'center', color: '#FFFFFF' }}>
+                <Send size={15} />
               </button>
             </div>
           </motion.div>
@@ -298,8 +322,7 @@ function AIChatWidget() {
   );
 }
 
-
-// ── Main Dashboard ────────────────────────────────────────────────────────────
+// ── Main Dashboard Page ──────────────────────────────────────────────────────
 export default function Dashboard() {
   const [salesData, setSalesData] = useState({ total_sales: 0, total_orders: 0, average_order_value: 0 });
   const [predictions, setPredictions] = useState([]);
@@ -324,22 +347,24 @@ export default function Dashboard() {
         axios.get(`${API_BASE_URL}/api/analytics/sales-by-country`).catch(() => ({ data: [] })),
         axios.get(`${API_BASE_URL}/api/dataset/info`).catch(() => ({ data: { files: [] } })),
       ]);
-      setSalesData(salesRes.data);
-      setPredictions(predRes.data.length ? predRes.data : []);
-      setClusters(clusterRes.data.length ? clusterRes.data : MOCK_CLUSTERS);
-      setMarketBasket(basketRes.data);
-      setTopProducts(topRes.data);
-      setSalesByCountry(countryRes.data);
+
+      setSalesData(salesRes.data || { total_sales: 0, total_orders: 0, average_order_value: 0 });
+      setPredictions(predRes.data?.length ? predRes.data : []);
+      setClusters(clusterRes.data?.length ? clusterRes.data : MOCK_CLUSTERS);
+      setMarketBasket(basketRes.data || []);
+      setTopProducts(topRes.data || []);
+      setSalesByCountry(countryRes.data || []);
+
       const files = datasetRes.data?.files || [];
       if (files.length > 0) {
         setActiveDataset(files[files.length - 1].name);
-        setClusters(clusterRes.data.length ? clusterRes.data : []);
+        setClusters(clusterRes.data?.length ? clusterRes.data : []);
       } else {
         setActiveDataset(null);
         setClusters([]);
       }
     } catch (err) {
-      console.error(err);
+      console.error('Failed to load dashboard data:', err);
       setClusters([]);
     } finally {
       setLoading(false);
@@ -357,342 +382,534 @@ export default function Dashboard() {
       const res = await axios.get(`${API_BASE_URL}/api/analytics/explain-trends`);
       setAiInsight(res.data.response || res.data.error || 'Failed to analyze data.');
     } catch {
-      setAiInsight('Groq API Error: Ensure backend is running and your API key is correctly set in .env');
+      setAiInsight('Groq API Error: Ensure the backend service is active and GROQ_API_KEY is configured in your .env file.');
     }
     setLoadingInsight(false);
+  };
+
+  const handleExportAll = () => {
+    downloadCSV(predictions, 'sales_predictions.csv');
+    setTimeout(() => downloadCSV(clusters, 'customer_segments.csv'), 200);
+    setTimeout(() => downloadCSV(topProducts, 'top_products.csv'), 400);
+    setTimeout(() => downloadCSV(salesByCountry, 'sales_by_country.csv'), 600);
+    setTimeout(() => downloadCSV(marketBasket, 'market_basket_rules.csv'), 800);
   };
 
   return (
     <>
       <motion.div className="container" initial="initial" animate="in" exit="out" variants={pageVariants}>
 
-        {/* Header */}
-        <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1.25rem' }}>
-          <div>
-            <h1>Business Dashboard</h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem' }}>
-              <p style={{ margin: 0 }}>Overview of your sales and customer insights.</p>
-              {activeDataset ? (
-                <motion.span
-                  initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
-                    background: 'rgba(99,102,241,0.15)',
-                    border: '1px solid rgba(99,102,241,0.35)',
-                    color: '#a5b4fc',
-                    padding: '3px 10px', borderRadius: '20px',
-                    fontSize: '0.78rem', fontWeight: 600, fontFamily: 'monospace'
-                  }}
-                >
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981', display: 'inline-block' }} />
-                  {activeDataset}
-                </motion.span>
-              ) : (
-                <motion.span
-                  initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
-                    background: 'rgba(239,68,68,0.12)',
-                    border: '1px solid rgba(239,68,68,0.3)',
-                    color: '#fca5a5',
-                    padding: '3px 10px', borderRadius: '20px',
-                    fontSize: '0.78rem', fontWeight: 600, fontFamily: 'monospace'
-                  }}
-                >
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
-                  No Dataset Uploaded
-                </motion.span>
-              )}
+        {/* ── Section A: Page Header ───────────────────────────────────────── */}
+        <div className="ui-page-header" style={{ marginBottom: '1.5rem' }}>
+          <div className="ui-page-header__main">
+            <div className="ui-page-header__title-area">
+              <div className="ui-page-header__title-row">
+                <h1 className="ui-page-header__title">Analytics Overview</h1>
+                {activeDataset ? (
+                  <Badge variant="success" withDot>
+                    {activeDataset}
+                  </Badge>
+                ) : (
+                  <Badge variant="warning" withDot>
+                    No Dataset Uploaded
+                  </Badge>
+                )}
+              </div>
+              <p className="ui-page-header__subtitle">
+                Executive performance metrics, predictive forecasting models, and customer intelligence.
+              </p>
+            </div>
+
+            <div className="ui-page-header__actions">
+              <Button
+                variant="outline"
+                size="md"
+                icon={<RefreshCw size={15} className={loading ? 'ui-btn__spinner' : ''} />}
+                onClick={fetchAll}
+                disabled={loading}
+              >
+                Refresh Data
+              </Button>
+              <Button
+                variant="secondary"
+                size="md"
+                icon={<Download size={15} />}
+                onClick={handleExportAll}
+                disabled={loading || !predictions.length}
+              >
+                Export All CSV
+              </Button>
             </div>
           </div>
-          <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-            onClick={() => {
-              downloadCSV(predictions, 'sales_predictions.csv');
-              setTimeout(() => downloadCSV(clusters, 'customer_segments.csv'), 300);
-              setTimeout(() => downloadCSV(topProducts, 'top_products.csv'), 600);
-              setTimeout(() => downloadCSV(salesByCountry, 'sales_by_country.csv'), 900);
-              setTimeout(() => downloadCSV(marketBasket, 'market_basket_rules.csv'), 1200);
-            }}>
-            <Download size={16} /> Export All
-          </button>
         </div>
 
-        {/* Empty state alert if no dataset uploaded */}
-        {!activeDataset && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
+        {/* ── Isolated Workspace Alert (If no dataset) ──────────────────────── */}
+        {!activeDataset && !loading && (
+          <div
             style={{
               padding: '1.25rem 1.5rem',
               marginBottom: '1.5rem',
-              borderRadius: 14,
-              background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(236, 72, 153, 0.08))',
-              border: '1px solid rgba(99, 102, 241, 0.3)',
+              borderRadius: 'var(--radius-card)',
+              backgroundColor: '#EEF2FF',
+              border: '1px solid #C7D2FE',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               gap: '1.5rem',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.2)'
+              boxShadow: 'var(--shadow-xs)',
+              flexWrap: 'wrap'
             }}
           >
             <div>
-              <h4 style={{ margin: '0 0 0.3rem 0', color: '#fff', fontSize: '1rem', fontWeight: 600 }}>
-                No Dataset Found for Your Account
-              </h4>
-              <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                Your data is strictly isolated to your account. To view analytics, predictions, and customer segmentation, please upload your sales data file (.xlsx, .csv).
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                <AlertCircle size={18} color="#4F46E5" />
+                <h4 style={{ margin: 0, color: '#1E1B4B', fontSize: '0.9375rem', fontWeight: 600 }}>
+                  No Sales Dataset Uploaded for Your Workspace
+                </h4>
+              </div>
+              <p style={{ margin: 0, color: '#4338CA', fontSize: '0.85rem' }}>
+                Your data is strictly sandboxed to your account. To generate live financial metrics, predictions, and customer segmentation, please upload your sales file (.xlsx or .csv).
               </p>
             </div>
-            <Link
-              to="/etl"
-              className="btn btn-primary"
-              style={{
-                flexShrink: 0,
-                textDecoration: 'none',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '0.6rem 1.1rem',
-                fontSize: '0.88rem'
-              }}
-            >
-              Upload Dataset <ArrowRight size={15} />
+            <Link to="/etl" style={{ textDecoration: 'none' }}>
+              <Button variant="primary" size="sm" icon={<ArrowRight size={14} />} iconPosition="right">
+                Go to ETL Uploader
+              </Button>
             </Link>
-          </motion.div>
+          </div>
         )}
 
-        {/* AI Insights Panel */}
-        <motion.div className="glass-panel" style={{ padding: '1.5rem', marginBottom: '1.5rem', background: 'linear-gradient(135deg, rgba(99,102,241,0.1), rgba(236,72,153,0.05))', border: '1px solid rgba(99,102,241,0.3)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: aiInsight || loadingInsight ? '1rem' : '0' }}>
-            <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#a5b4fc', margin: 0 }}>
-              <Sparkles size={20} color="#ec4899" /> AI Business Analyst
-            </h3>
-            <button className="btn btn-primary" onClick={generateInsights} disabled={loadingInsight} style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}>
-              {loadingInsight ? 'Analyzing...' : 'Generate Insights'}
-            </button>
+        {/* ── Section H: AI Executive Insights Card ────────────────────────── */}
+        <div className="dashboard-ai-card">
+          <div className="dashboard-ai-card__header">
+            <div className="dashboard-ai-card__title-box">
+              <Sparkles size={20} className="dashboard-ai-card__icon" />
+              <div>
+                <h3 className="dashboard-ai-card__title">AI Executive Insights</h3>
+                <div className="dashboard-ai-card__subtitle">
+                  High-level performance narrative generated via Groq LLM inference
+                </div>
+              </div>
+            </div>
+
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Sparkles size={14} />}
+              onClick={generateInsights}
+              loading={loadingInsight}
+            >
+              {aiInsight ? 'Regenerate Analysis' : 'Generate Analysis'}
+            </Button>
           </div>
+
           {loadingInsight ? (
-            <div className="skeleton" style={{ height: '60px', width: '100%', borderRadius: '8px' }}></div>
+            <div style={{ marginTop: '1rem' }}>
+              <Skeleton variant="text" count={3} />
+            </div>
           ) : aiInsight ? (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-              style={{ padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', borderLeft: '3px solid #ec4899', fontSize: '0.95rem', lineHeight: '1.6', color: 'var(--text-main)' }}>
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="dashboard-ai-card__content"
+            >
               {aiInsight}
             </motion.div>
           ) : null}
-        </motion.div>
+        </div>
 
+        {/* ── Section B: KPI Summary Cards ─────────────────────────────────── */}
         {loading ? (
-          <>
-            <div className="dashboard-grid">
-              <div className="skeleton" style={{ height: 120 }}></div>
-              <div className="skeleton" style={{ height: 120 }}></div>
-              <div className="skeleton" style={{ height: 120 }}></div>
-            </div>
-            <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-              <div className="skeleton" style={{ height: 360 }}></div>
-              <div className="skeleton" style={{ height: 360 }}></div>
-              <div className="skeleton" style={{ height: 360 }}></div>
-              <div className="skeleton" style={{ height: 360 }}></div>
-            </div>
-          </>
+          <div className="dashboard-kpi-grid">
+            <Skeleton variant="rectangular" height="128px" />
+            <Skeleton variant="rectangular" height="128px" />
+            <Skeleton variant="rectangular" height="128px" />
+          </div>
         ) : (
-          <motion.div variants={containerVariants} initial="hidden" animate="show">
+          <div className="dashboard-kpi-grid">
+            <MetricCard
+              label="Total Revenue"
+              value={`₹${(salesData.total_sales || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              subtitle="All-time gross sales across active dataset"
+              icon={<TrendingUp size={18} />}
+              iconBg="#EEF2FF"
+              iconColor="#4F46E5"
+            />
+            <MetricCard
+              label="Total Orders"
+              value={(salesData.total_orders || 0).toLocaleString()}
+              subtitle="Completed customer transaction volume"
+              icon={<ShoppingBag size={18} />}
+              iconBg="#ECFDF5"
+              iconColor="#10B981"
+            />
+            <MetricCard
+              label="Average Order Value (AOV)"
+              value={`₹${(salesData.average_order_value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              subtitle="Mean monetary revenue per order"
+              icon={<CreditCard size={18} />}
+              iconBg="#EFF6FF"
+              iconColor="#0284C7"
+            />
+          </div>
+        )}
 
-            {/* KPI Stats */}
-            <div className="dashboard-grid">
-              <motion.div variants={itemVariants} className="glass-panel stat-card">
-                <h3>Total Sales</h3>
-                <div className="value">₹{salesData.total_sales?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                <span style={{ color: 'var(--accent-secondary)', fontSize: '0.9rem' }}>All time revenue</span>
-              </motion.div>
-              <motion.div variants={itemVariants} className="glass-panel stat-card">
-                <h3>Total Orders</h3>
-                <div className="value">{salesData.total_orders?.toLocaleString()}</div>
-                <span style={{ color: 'var(--accent-primary)', fontSize: '0.9rem' }}>Completed orders</span>
-              </motion.div>
-              <motion.div variants={itemVariants} className="glass-panel stat-card">
-                <h3>Avg Order Value</h3>
-                <div className="value">₹{salesData.average_order_value?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                <span style={{ color: '#10B981', fontSize: '0.9rem' }}>Per transaction</span>
-              </motion.div>
-            </div>
+        {/* ── Section C & D: Row 1 — Sales Forecasting & Customer Segments ─── */}
+        <div className="dashboard-two-col">
 
-            {/* Row 1: Sales Trend + Customer Types */}
-            <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-
-              <motion.div variants={itemVariants} className="glass-panel chart-container">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <h2 style={{ margin: 0 }}>Sales Trends & Future Predictions</h2>
-                  <button onClick={() => downloadCSV(predictions, 'sales_predictions.csv')}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }} title="Export CSV">
-                    <Download size={15} />
-                  </button>
-                </div>
-                <ResponsiveContainer width="100%" height="85%">
-                  <LineChart data={predictions}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#2a2c3d" />
-                    <XAxis dataKey="period" stroke="#94a3b8" tick={{ fontSize: 11 }} />
-                    <YAxis stroke="#94a3b8" tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} />
-                    <RechartsTooltip contentStyle={{ backgroundColor: 'rgba(19, 21, 31, 0.95)', border: '1px solid rgba(255,255,255,0.1)' }} formatter={v => `₹${v?.toLocaleString()}`} />
-                    <Legend />
-                    <Line type="monotone" dataKey="actual_sales" stroke="#6366f1" strokeWidth={3} name="Actual Sales" dot={{ r: 3 }} />
-                    <Line type="monotone" dataKey="predicted_sales" stroke="#ec4899" strokeWidth={3} strokeDasharray="5 5" name="Predicted Sales" />
+          {/* Section C: Sales Analytics & Forecasting Chart */}
+          <Card
+            title="Sales Trends & Forecasting"
+            subtitle="Historical revenue vs Holt-Winters seasonal polynomial forecast"
+            actions={
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<Download size={14} />}
+                onClick={() => downloadCSV(predictions, 'sales_predictions.csv')}
+                disabled={!predictions.length}
+                title="Export forecast data to CSV"
+              >
+                CSV
+              </Button>
+            }
+          >
+            {loading ? (
+              <Skeleton variant="rectangular" height="300px" />
+            ) : predictions.length === 0 ? (
+              <EmptyState
+                title="No Sales Trend Data"
+                description="Upload an e-commerce sales dataset and run the ETL pipeline to view predictive trend models."
+              />
+            ) : (
+              <div style={{ width: '100%', height: 320 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={predictions} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+                    <XAxis dataKey="period" stroke="#64748B" tick={{ fontSize: 11, fill: '#64748B' }} />
+                    <YAxis stroke="#64748B" tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11, fill: '#64748B' }} />
+                    <RechartsTooltip content={<CustomChartTooltip />} />
+                    <Legend
+                      verticalAlign="top"
+                      align="right"
+                      wrapperStyle={{ paddingBottom: 10, fontSize: 12 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="actual_sales"
+                      stroke="#4F46E5"
+                      strokeWidth={2.5}
+                      name="Actual Sales"
+                      dot={{ r: 3, fill: '#4F46E5' }}
+                      activeDot={{ r: 5 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="predicted_sales"
+                      stroke="#F59E0B"
+                      strokeWidth={2.5}
+                      strokeDasharray="5 5"
+                      name="Forecast"
+                      dot={{ r: 3, fill: '#F59E0B' }}
+                    />
                   </LineChart>
                 </ResponsiveContainer>
-              </motion.div>
+              </div>
+            )}
+          </Card>
 
-              <motion.div variants={itemVariants} className="glass-panel chart-container">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <h2 style={{ margin: 0 }}>Customer Types</h2>
-                  <button onClick={() => downloadCSV(clusters, 'customer_segments.csv')}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }} title="Export CSV">
-                    <Download size={15} />
-                  </button>
-                </div>
-                <div style={{ display: 'flex', height: '85%' }}>
-                  <ResponsiveContainer width="50%" height="100%">
+          {/* Section D: Customer Segmentation (RFM K-Means) */}
+          <Card
+            title="Customer Segments (RFM)"
+            subtitle="K-Means clustering on Recency, Frequency, and Monetary spend"
+            actions={
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<Download size={14} />}
+                onClick={() => downloadCSV(clusters, 'customer_segments.csv')}
+                disabled={!clusters.length}
+                title="Export customer segments to CSV"
+              >
+                CSV
+              </Button>
+            }
+          >
+            {loading ? (
+              <Skeleton variant="rectangular" height="300px" />
+            ) : clusters.length === 0 ? (
+              <EmptyState
+                title="No Customer Clusters"
+                description="Run the ETL pipeline to generate K-Means RFM customer segmentation tiers."
+              />
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', height: 320, gap: '1rem', flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 200px', height: '100%' }}>
+                  <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={clusters} cx="50%" cy="50%" innerRadius={55} outerRadius={75} paddingAngle={5} dataKey="Customer_Count" nameKey="Segment">
-                        {clusters.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                      <Pie
+                        data={clusters}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={80}
+                        paddingAngle={4}
+                        dataKey="Customer_Count"
+                        nameKey="Segment"
+                      >
+                        {clusters.map((_, i) => (
+                          <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                        ))}
                       </Pie>
-                      <RechartsTooltip contentStyle={{ backgroundColor: '#13151f', border: 'none' }} />
+                      <RechartsTooltip
+                        contentStyle={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '12px' }}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
-                  <div style={{ width: '50%', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '1rem' }}>
-                    {clusters.map((c, i) => (
-                      <div key={i}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                          <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: COLORS[i] }}></div>
-                          <strong style={{ color: 'var(--text-main)', fontSize: '0.9rem' }}>{c.Segment}</strong>
+                </div>
+
+                <div style={{ flex: '1 1 220px', display: 'flex', flexDirection: 'column', gap: '0.75rem', justifyContent: 'center' }}>
+                  {clusters.map((c, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        padding: '0.6rem 0.8rem',
+                        backgroundColor: '#F8FAFC',
+                        border: '1px solid #E2E8F0',
+                        borderRadius: 'var(--radius-md)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span
+                            style={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: '50%',
+                              backgroundColor: CHART_COLORS[i % CHART_COLORS.length]
+                            }}
+                          />
+                          <strong style={{ fontSize: '0.85rem', color: '#0F172A' }}>{c.Segment}</strong>
                         </div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                          Avg Spend: ₹{c.Avg_Monetary?.toLocaleString(undefined, { maximumFractionDigits: 0 })}<br />
-                          {c.Customer_Count} customers
-                        </div>
+                        <Badge size="sm" variant="default">
+                          {c.Customer_Count?.toLocaleString()} users
+                        </Badge>
                       </div>
-                    ))}
-                  </div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748B', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Avg Spend: <strong>₹{c.Avg_Monetary?.toLocaleString(undefined, { maximumFractionDigits: 0 })}</strong></span>
+                        <span>Freq: <strong>{c.Avg_Frequency}</strong></span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </motion.div>
-            </div>
-
-            {/* Row 2: Feature 1 — Top Products + Feature 3 — Sales by Country */}
-            <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-
-              {/* Feature 1: Top Products Leaderboard */}
-              <motion.div variants={itemVariants} className="glass-panel chart-container">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <Trophy size={18} color="#f59e0b" /> Top Products
-                  </h2>
-                  <button onClick={() => downloadCSV(topProducts, 'top_products.csv')}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }} title="Export CSV">
-                    <Download size={15} />
-                  </button>
-                </div>
-                <ResponsiveContainer width="100%" height="85%">
-                  <BarChart data={topProducts} layout="vertical" margin={{ left: 10, right: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#2a2c3d" horizontal={false} />
-                    <XAxis type="number" stroke="#94a3b8" tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} />
-                    <YAxis type="category" dataKey="product" stroke="#94a3b8" width={120}
-                      tick={{ fontSize: 10, fill: '#94a3b8' }}
-                      tickFormatter={v => v.length > 18 ? v.substring(0, 18) + '…' : v} />
-                    <RechartsTooltip contentStyle={{ backgroundColor: 'rgba(19,21,31,0.95)', border: '1px solid rgba(255,255,255,0.1)' }}
-                      formatter={(v, n, p) => [`₹${v?.toLocaleString()}`, p.payload.product]} labelFormatter={() => ''} />
-                    <Bar dataKey="revenue" name="Revenue" radius={[0, 4, 4, 0]}>
-                      {topProducts.map((_, i) => <Cell key={i} fill={i === 0 ? '#f59e0b' : i === 1 ? '#94a3b8' : i === 2 ? '#cd7f32' : '#6366f1'} />)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </motion.div>
-
-              {/* Feature 3: Sales by Country */}
-              <motion.div variants={itemVariants} className="glass-panel chart-container">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <Globe size={18} color="#38bdf8" /> Sales by Region
-                  </h2>
-                  <button onClick={() => downloadCSV(salesByCountry, 'sales_by_country.csv')}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }} title="Export CSV">
-                    <Download size={15} />
-                  </button>
-                </div>
-                <ResponsiveContainer width="100%" height="85%">
-                  <BarChart data={salesByCountry} layout="vertical" margin={{ left: 10, right: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#2a2c3d" horizontal={false} />
-                    <XAxis type="number" stroke="#94a3b8" tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} />
-                    <YAxis type="category" dataKey="country" stroke="#94a3b8" width={80} tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                    <RechartsTooltip contentStyle={{ backgroundColor: 'rgba(19,21,31,0.95)', border: '1px solid rgba(255,255,255,0.1)' }}
-                      formatter={v => [`₹${v?.toLocaleString()}`, 'Revenue']} />
-                    <Bar dataKey="revenue" name="Revenue" radius={[0, 4, 4, 0]}>
-                      {salesByCountry.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </motion.div>
-            </div>
-
-            {/* Market Basket */}
-            <motion.div variants={itemVariants} className="glass-panel" style={{ padding: '1.5rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <h2 style={{ margin: 0 }}>Products Usually Bought Together</h2>
-                <button
-                  onClick={() => {
-                    const exportData = marketBasket.map(r => ({
-                      'Items': r.rule,
-                      'Confidence': `${(r.confidence * 100).toFixed(1)}%`,
-                      'Support': `${(r.support * 100).toFixed(2)}%`,
-                      'Strength (Lift)': r.lift?.toFixed(2)
-                    }));
-                    downloadCSV(exportData, 'products_usually_bought_together.csv');
-                  }}
-                  disabled={!marketBasket.length}
-                  className="btn btn-outline"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.4rem',
-                    fontSize: '0.8rem',
-                    padding: '0.35rem 0.75rem',
-                    opacity: marketBasket.length ? 1 : 0.5,
-                    cursor: marketBasket.length ? 'pointer' : 'not-allowed'
-                  }}
-                  title={marketBasket.length ? 'Export association rules to CSV' : 'No rules available to export'}
-                >
-                  <Download size={13} /> Export CSV
-                </button>
               </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Items</th>
-                      <th>Confidence</th>
-                      <th>Support</th>
-                      <th>Strength</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {marketBasket.length ? marketBasket.map((rule, idx) => (
+            )}
+          </Card>
+
+        </div>
+
+        {/* ── Section E & F: Row 2 — Top Products & Geographic Revenue ─────── */}
+        <div className="dashboard-two-col">
+
+          {/* Section E: Product Performance Leaderboard */}
+          <Card
+            title="Top Products by Revenue"
+            subtitle="Catalog revenue leaders and high-volume contributors"
+            icon={<Trophy size={18} color="#F59E0B" />}
+            actions={
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<Download size={14} />}
+                onClick={() => downloadCSV(topProducts, 'top_products.csv')}
+                disabled={!topProducts.length}
+                title="Export top products to CSV"
+              >
+                CSV
+              </Button>
+            }
+          >
+            {loading ? (
+              <Skeleton variant="rectangular" height="300px" />
+            ) : topProducts.length === 0 ? (
+              <EmptyState
+                title="No Product Data"
+                description="Catalog product performance will appear after loading the dataset."
+              />
+            ) : (
+              <div style={{ width: '100%', height: 320 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={topProducts} layout="vertical" margin={{ left: 10, right: 20, top: 10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" horizontal={false} />
+                    <XAxis type="number" stroke="#64748B" tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11, fill: '#64748B' }} />
+                    <YAxis
+                      type="category"
+                      dataKey="product"
+                      stroke="#64748B"
+                      width={130}
+                      tick={{ fontSize: 11, fill: '#475569' }}
+                      tickFormatter={v => v.length > 20 ? v.substring(0, 20) + '…' : v}
+                    />
+                    <RechartsTooltip
+                      content={<CustomChartTooltip formatter={(v, n, p) => [`₹${v?.toLocaleString()}`, p.payload.product]} />}
+                    />
+                    <Bar dataKey="revenue" name="Revenue" radius={[0, 4, 4, 0]}>
+                      {topProducts.map((_, i) => (
+                        <Cell
+                          key={i}
+                          fill={i === 0 ? '#F59E0B' : i === 1 ? '#94A3B8' : i === 2 ? '#B45309' : '#4F46E5'}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </Card>
+
+          {/* Section F: Geographic Revenue Analytics */}
+          <Card
+            title="Geographic Revenue Distribution"
+            subtitle="Top 12 revenue-generating countries and markets"
+            icon={<Globe size={18} color="#0284C7" />}
+            actions={
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<Download size={14} />}
+                onClick={() => downloadCSV(salesByCountry, 'sales_by_country.csv')}
+                disabled={!salesByCountry.length}
+                title="Export sales by country to CSV"
+              >
+                CSV
+              </Button>
+            }
+          >
+            {loading ? (
+              <Skeleton variant="rectangular" height="300px" />
+            ) : salesByCountry.length === 0 ? (
+              <EmptyState
+                title="No Regional Data"
+                description="Geographic breakdowns will calculate once data is processed through ETL."
+              />
+            ) : (
+              <div style={{ width: '100%', height: 320 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={salesByCountry} layout="vertical" margin={{ left: 10, right: 20, top: 10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" horizontal={false} />
+                    <XAxis type="number" stroke="#64748B" tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11, fill: '#64748B' }} />
+                    <YAxis
+                      type="category"
+                      dataKey="country"
+                      stroke="#64748B"
+                      width={90}
+                      tick={{ fontSize: 11, fill: '#475569' }}
+                    />
+                    <RechartsTooltip
+                      content={<CustomChartTooltip formatter={v => [`₹${v?.toLocaleString()}`, 'Revenue']} />}
+                    />
+                    <Bar dataKey="revenue" name="Revenue" fill="#0284C7" radius={[0, 4, 4, 0]}>
+                      {salesByCountry.map((_, i) => (
+                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </Card>
+
+        </div>
+
+        {/* ── Section G: Market Basket Analysis (Apriori Rules) ─────────────── */}
+        <Card
+          title="Products Frequently Bought Together"
+          subtitle="Association rules mined via adaptive Apriori algorithm with confidence & lift thresholds"
+          actions={
+            <Button
+              variant="outline"
+              size="sm"
+              icon={<Download size={14} />}
+              onClick={() => {
+                const exportData = marketBasket.map(r => ({
+                  'Antecedent / Consequent': r.rule,
+                  'Confidence': `${(r.confidence * 100).toFixed(1)}%`,
+                  'Support': `${(r.support * 100).toFixed(2)}%`,
+                  'Lift': r.lift?.toFixed(2)
+                }));
+                downloadCSV(exportData, 'market_basket_rules.csv');
+              }}
+              disabled={!marketBasket.length}
+            >
+              Export Rules CSV
+            </Button>
+          }
+          noPadding
+        >
+          {loading ? (
+            <div style={{ padding: '1.5rem' }}>
+              <Skeleton variant="text" count={5} />
+            </div>
+          ) : marketBasket.length === 0 ? (
+            <div style={{ padding: '2rem' }}>
+              <EmptyState
+                title="No Association Rules Discovered"
+                description="Run the ETL Pipeline to discover cross-sell recommendations with the adaptive Apriori algorithm."
+              />
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Product Association Rule</th>
+                    <th style={{ width: 140 }}>Confidence</th>
+                    <th style={{ width: 140 }}>Support</th>
+                    <th style={{ width: 150 }}>Association Strength</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {marketBasket.map((rule, idx) => {
+                    const parts = rule.rule.split(' -> ');
+                    const antecedent = parts[0] || rule.rule;
+                    const consequent = parts[1] || '';
+
+                    return (
                       <tr key={idx}>
-                        <td style={{ color: 'var(--text-main)', fontWeight: 500 }}>{rule.rule}</td>
-                        <td>{(rule.confidence * 100).toFixed(1)}%</td>
-                        <td>{(rule.support * 100).toFixed(2)}%</td>
-                        <td style={{ color: 'var(--accent-secondary)', fontWeight: 'bold' }}>{rule.lift?.toFixed(2)}</td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <span style={{ fontWeight: 600, color: '#0F172A' }}>{antecedent}</span>
+                            {consequent && (
+                              <>
+                                <ArrowRight size={13} color="#94A3B8" style={{ flexShrink: 0 }} />
+                                <span style={{ color: '#4F46E5', fontWeight: 600 }}>{consequent}</span>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                        <td style={{ color: '#0F172A', fontWeight: 500 }}>
+                          {(rule.confidence * 100).toFixed(1)}%
+                        </td>
+                        <td style={{ color: '#64748B' }}>
+                          {(rule.support * 100).toFixed(2)}%
+                        </td>
+                        <td>
+                          <Badge variant="purple" size="sm">
+                            {rule.lift?.toFixed(2)}x Lift
+                          </Badge>
+                        </td>
                       </tr>
-                    )) : (
-                      <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>No association rules found yet — run ETL pipeline first.</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </motion.div>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
 
-          </motion.div>
-        )}
       </motion.div>
 
-      {/* Feature 5: AI Chat Widget — always visible */}
+      {/* ── Section I: AI Chatbot Floating Widget (Fully Preserved) ────────── */}
       <AIChatWidget />
     </>
   );
