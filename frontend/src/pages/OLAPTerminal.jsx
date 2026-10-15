@@ -102,11 +102,11 @@ export default function OLAPTerminal() {
   }, []);
 
   // Assemble filter payload for backend
-  const getFilters = useCallback(() => {
-    if (activeQuery === 'rollup') return rollupFilters;
-    if (activeQuery === 'drilldown') return drilldownFilters;
-    if (activeQuery === 'slice') return sliceFilters;
-    if (activeQuery === 'dice') {
+  const getFilters = useCallback((queryKey = activeQuery) => {
+    if (queryKey === 'rollup') return rollupFilters;
+    if (queryKey === 'drilldown') return drilldownFilters;
+    if (queryKey === 'slice') return sliceFilters;
+    if (queryKey === 'dice') {
       return {
         ...diceFilters,
         categories: Array.isArray(diceFilters.categories)
@@ -118,15 +118,15 @@ export default function OLAPTerminal() {
   }, [activeQuery, rollupFilters, drilldownFilters, sliceFilters, diceFilters]);
 
   // Execute analytical query against backend
-  const handleExecute = useCallback(async () => {
-    if (isRunning) return;
+  const handleExecute = useCallback(async (targetKey = null) => {
+    const queryKey = targetKey || activeQuery;
     setIsRunning(true);
     setError(null);
-    const filters = getFilters();
+    const filters = getFilters(queryKey);
 
     try {
       const res = await axios.post(`${API_BASE_URL}/api/olap/query`, {
-        query_key: activeQuery,
+        query_key: queryKey,
         filters
       });
 
@@ -137,7 +137,7 @@ export default function OLAPTerminal() {
         live: true
       });
     } catch (err) {
-      const q = OPERATION_DEFINITIONS[activeQuery];
+      const q = OPERATION_DEFINITIONS[queryKey];
       setExecutedData({
         headers: q.fallbackHeaders,
         data: q.fallbackData,
@@ -153,19 +153,18 @@ export default function OLAPTerminal() {
     } finally {
       setIsRunning(false);
     }
-  }, [activeQuery, getFilters, isRunning]);
+  }, [activeQuery, getFilters]);
 
   // Execute initial query on mount once
   useEffect(() => {
-    handleExecute();
+    handleExecute('rollup');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Switch operation
+  // Switch operation: immediately synchronize SQL and run query for instant interaction
   const handleSelectOperation = (key) => {
     setActiveQuery(key);
-    setExecutedData(null);
-    setError(null);
+    handleExecute(key);
   };
 
   // Reset current operation filters to defaults
@@ -201,100 +200,104 @@ export default function OLAPTerminal() {
 
   return (
     <motion.div
-      className="olap-workspace"
+      className="container"
       initial="initial"
       animate="in"
       exit="out"
       variants={pageVariants}
       transition={{ duration: 0.2 }}
     >
-      {/* ── Page Header ── */}
-      <PageHeader
-        title="OLAP Terminal"
-        subtitle="Explore multidimensional data using analytical operations across Star & Snowflake schemas."
-        badge={
-          activeDataset ? (
-            <Badge variant="neutral" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <span
-                style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: '50%',
-                  background: 'var(--color-success)',
-                  display: 'inline-block'
-                }}
-              />
-              <Database size={13} />
-              <span>{activeDataset}</span>
-            </Badge>
-          ) : null
-        }
-        actions={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-            <Button
-              variant="primary"
-              onClick={handleExecute}
-              disabled={isRunning}
-              icon={<Play size={14} fill="currentColor" />}
-            >
-              {isRunning ? 'Executing Query...' : 'Execute Query'}
-            </Button>
-          </div>
-        }
-      />
-
-      {/* ── Operation Selector (Roll-up, Drill-down, Slice, Dice) ── */}
-      <OlapOperationSelector
-        activeQuery={activeQuery}
-        onSelectOperation={handleSelectOperation}
-      />
-
-      {/* ── Two-Column Analytical Workspace ── */}
-      <div className="olap-main-grid">
-        {/* Left Column: Configuration & SQL Preview */}
-        <div className="olap-left-pane">
-          <OlapConfiguration
-            activeQuery={activeQuery}
-            rollupFilters={rollupFilters}
-            setRollupFilters={setRollupFilters}
-            drilldownFilters={drilldownFilters}
-            setDrilldownFilters={setDrilldownFilters}
-            sliceFilters={sliceFilters}
-            setSliceFilters={setSliceFilters}
-            diceFilters={diceFilters}
-            setDiceFilters={setDiceFilters}
-            onResetDefaults={handleResetDefaults}
-          />
-
-          <SQLPreview sql={currentSQL} activeQuery={activeQuery} />
-
-          {/* Quick Execution Bar below SQL Preview */}
-          <div className="olap-exec-bar">
-            <div className="olap-exec-meta">
-              <Cpu size={14} style={{ color: 'var(--accent-primary)' }} />
-              <span>Target Fact: <code>ecom_sales_fact</code></span>
+      <div className="olap-workspace">
+        {/* ── Page Header ── */}
+        <PageHeader
+          title="OLAP Terminal"
+          subtitle="Explore multidimensional data using analytical operations across Star & Snowflake schemas."
+          badge={
+            activeDataset ? (
+              <Badge variant="neutral" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: '50%',
+                    background: 'var(--color-success)',
+                    display: 'inline-block'
+                  }}
+                />
+                <Database size={13} />
+                <span>{activeDataset}</span>
+              </Badge>
+            ) : null
+          }
+          actions={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <Button
+                variant="primary"
+                onClick={() => handleExecute(activeQuery)}
+                disabled={isRunning}
+                icon={<Play size={14} fill="currentColor" />}
+              >
+                {isRunning ? 'Executing Query...' : 'Execute Query'}
+              </Button>
             </div>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleExecute}
-              disabled={isRunning}
-              icon={<Play size={13} fill="currentColor" />}
-            >
-              {isRunning ? 'Running...' : 'Run Query'}
-            </Button>
-          </div>
-        </div>
+          }
+        />
 
-        {/* Right Column: Query Results Workspace */}
-        <div className="olap-right-pane">
-          <QueryResultsTable
-            isRunning={isRunning}
-            executedData={executedData}
-            error={error}
-            currencySymbol={currencySymbol}
-            onExecute={handleExecute}
-          />
+        {/* ── Operation Selector (Roll-up, Drill-down, Slice, Dice) ── */}
+        <OlapOperationSelector
+          activeQuery={activeQuery}
+          onSelectOperation={handleSelectOperation}
+        />
+
+        {/* ── Two-Column Analytical Workspace ── */}
+        <div className="olap-main-grid">
+          {/* Left Column: Configuration & SQL Preview */}
+          <div className="olap-left-pane">
+            <OlapConfiguration
+              activeQuery={activeQuery}
+              rollupFilters={rollupFilters}
+              setRollupFilters={setRollupFilters}
+              drilldownFilters={drilldownFilters}
+              setDrilldownFilters={setDrilldownFilters}
+              sliceFilters={sliceFilters}
+              setSliceFilters={setSliceFilters}
+              diceFilters={diceFilters}
+              setDiceFilters={setDiceFilters}
+              onResetDefaults={handleResetDefaults}
+              onExecute={() => handleExecute(activeQuery)}
+              isRunning={isRunning}
+            />
+
+            <SQLPreview sql={currentSQL} activeQuery={activeQuery} />
+
+            {/* Quick Execution Bar below SQL Preview */}
+            <div className="olap-exec-bar">
+              <div className="olap-exec-meta">
+                <Cpu size={14} style={{ color: 'var(--accent-primary)' }} />
+                <span>Target Fact: <code>ecom_sales_fact</code></span>
+              </div>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => handleExecute(activeQuery)}
+                disabled={isRunning}
+                icon={<Play size={13} fill="currentColor" />}
+              >
+                {isRunning ? 'Running...' : 'Run Query'}
+              </Button>
+            </div>
+          </div>
+
+          {/* Right Column: Query Results Workspace */}
+          <div className="olap-right-pane">
+            <QueryResultsTable
+              isRunning={isRunning}
+              executedData={executedData}
+              error={error}
+              currencySymbol={currencySymbol}
+              onExecute={() => handleExecute(activeQuery)}
+            />
+          </div>
         </div>
       </div>
     </motion.div>

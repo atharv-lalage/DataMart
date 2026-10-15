@@ -2386,8 +2386,8 @@ tr:hover td {
 /* ── Two-Column Main Layout: Config / SQL on Left, Results on Right ── */
 .olap-main-grid {
   display: grid;
-  grid-template-columns: 480px 1fr;
-  gap: var(--space-6);
+  grid-template-columns: 400px 1fr;
+  gap: var(--space-5);
   align-items: start;
 }
 
@@ -2395,7 +2395,7 @@ tr:hover td {
 .olap-left-pane {
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
+  gap: var(--space-4);
 }
 
 /* Configuration Card */
@@ -2403,11 +2403,11 @@ tr:hover td {
   background: var(--surface-card);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  padding: var(--space-5);
+  padding: var(--space-4) var(--space-5);
   box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 .olap-config-header {
@@ -2560,7 +2560,7 @@ tr:hover td {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-4);
   background: #111827;
   border-bottom: 1px solid #1F2937;
 }
@@ -2617,9 +2617,11 @@ tr:hover td {
 }
 
 .olap-sql-body {
-  padding: var(--space-4);
+  padding: var(--space-3) var(--space-4);
   background: #0B0F17;
   overflow-x: auto;
+  max-height: 220px;
+  overflow-y: auto;
 }
 
 .olap-sql-pre {
@@ -2629,6 +2631,22 @@ tr:hover td {
   line-height: 1.65;
   color: #E2E8F0;
   white-space: pre-wrap;
+}
+
+/* SQL Syntax Highlighting Tokens */
+.sql-token-kw {
+  color: #818CF8;
+  font-weight: 600;
+}
+.sql-token-table {
+  color: #38BDF8;
+  font-weight: 500;
+}
+.sql-token-str {
+  color: #34D399;
+}
+.sql-token-num {
+  color: #F472B6;
 }
 
 .olap-sql-footer {

@@ -12,29 +12,45 @@ export default function SQLPreview({ sql, activeQuery }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Safe SQL Syntax Highlighter
+  // Safe SQL Syntax Highlighter using CSS classes and tokenization
   const formatSQL = (rawSql) => {
     if (!rawSql) return '';
-    return rawSql
+    let safe = rawSql
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(
-        /\b(SELECT|FROM|WHERE|JOIN|GROUP BY|ORDER BY|SUM|LIMIT|AND|IN|ON|AS|LEFT|INNER|LOWER|DESC|ASC)\b/g,
-        (match) => `<span style="color: #818CF8; font-weight: 600;">${match}</span>`
-      )
-      .replace(
-        /\b(ecom_sales_fact|ecom_dim_time|ecom_dim_customer|ecom_dim_product|ecom_dim_category)\b/g,
-        (match) => `<span style="color: #38BDF8; font-weight: 500;">${match}</span>`
-      )
-      .replace(
-        /(\b\d+(\.\d+)?\b)/g,
-        (match) => `<span style="color: #F472B6;">${match}</span>`
-      )
-      .replace(
-        /('([^'\\]|\\.)*')/g,
-        (match) => `<span style="color: #34D399;">${match}</span>`
-      );
+      .replace(/>/g, '&gt;');
+
+    // 1. Extract string literals to prevent inner keyword/numeric replacements
+    const strTokens = [];
+    safe = safe.replace(/('([^'\\]|\\.)*')/g, (match) => {
+      strTokens.push(match);
+      return `___SQL_STR_${strTokens.length - 1}___`;
+    });
+
+    // 2. Highlight SQL Keywords
+    safe = safe.replace(
+      /\b(SELECT|FROM|WHERE|JOIN|GROUP BY|ORDER BY|SUM|LIMIT|AND|IN|ON|AS|LEFT|INNER|LOWER|DESC|ASC)\b/g,
+      '<span class="sql-token-kw">$1</span>'
+    );
+
+    // 3. Highlight Fact and Dimension Tables
+    safe = safe.replace(
+      /\b(ecom_sales_fact|ecom_dim_time|ecom_dim_customer|ecom_dim_product|ecom_dim_category)\b/g,
+      '<span class="sql-token-table">$1</span>'
+    );
+
+    // 4. Highlight Numbers
+    safe = safe.replace(
+      /\b(\d+(\.\d+)?)\b/g,
+      '<span class="sql-token-num">$1</span>'
+    );
+
+    // 5. Restore String Literals
+    safe = safe.replace(/___SQL_STR_(\d+)___/g, (_, idx) => {
+      return `<span class="sql-token-str">${strTokens[Number(idx)]}</span>`;
+    });
+
+    return safe;
   };
 
   // Compute line count

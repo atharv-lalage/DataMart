@@ -1,5 +1,5 @@
 import React from 'react';
-import { SlidersHorizontal, RotateCcw, Database, Layers } from 'lucide-react';
+import { SlidersHorizontal, RotateCcw, Database, Layers, Play } from 'lucide-react';
 import { Button } from '../common/index.js';
 import { OPERATION_DEFINITIONS } from './OlapOperationSelector.jsx';
 
@@ -55,7 +55,9 @@ export default function OlapConfiguration({
   setSliceFilters,
   diceFilters,
   setDiceFilters,
-  onResetDefaults
+  onResetDefaults,
+  onExecute,
+  isRunning
 }) {
   const currentOp = OPERATION_DEFINITIONS[activeQuery] || OPERATION_DEFINITIONS.rollup;
 
@@ -266,6 +268,20 @@ export default function OlapConfiguration({
           </div>
         </div>
       )}
+
+      {/* Direct Apply & Run Query Action Button */}
+      <div style={{ marginTop: 'var(--space-2)', paddingTop: 'var(--space-3)', borderTop: '1px solid var(--border-default)' }}>
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={onExecute}
+          disabled={isRunning}
+          icon={<Play size={13} fill="currentColor" />}
+          style={{ width: '100%', justifyContent: 'center' }}
+        >
+          {isRunning ? 'Executing Analytical Query...' : 'Apply Filters & Run Query'}
+        </Button>
+      </div>
     </div>
   );
 }
