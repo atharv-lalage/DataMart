@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
-import { Trash2 } from 'lucide-react';
 import axios from 'axios';
 import API_BASE_URL from './config';
-import Sidebar from './components/Sidebar';
+import AppLayout from './components/layout/AppLayout';
 import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import Auth from './pages/Auth';
@@ -102,56 +101,16 @@ function App() {
     );
   }
 
-  const initialLetter = currentUser?.username
-    ? currentUser.username[0].toUpperCase()
-    : 'A';
-
   return (
     <Router>
-      <div className="app">
-        <Sidebar currentUser={currentUser} onLogout={handleLogout} />
-        <div className="main-content">
-          <header className="top-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div></div>
-            <div className="header-user" style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-              <button 
-                className="btn btn-outline" 
-                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderColor: '#ef4444', color: '#ef4444', padding: '0.4rem 0.8rem' }}
-                onClick={handleDropDataset}
-                disabled={dropping}
-              >
-                <Trash2 size={16} /> {dropping ? 'Dropping...' : 'Drop Dataset'}
-              </button>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                    {currentUser?.username || 'Administrator'}
-                  </div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    {currentUser?.role === 'admin' ? 'Admin Access' : 'User'}
-                  </div>
-                </div>
-                <div
-                  className="avatar"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: 'linear-gradient(135deg, #6366f1, #ec4899)',
-                    color: 'white',
-                    fontWeight: 700,
-                    fontSize: '0.88rem',
-                    boxShadow: '0 4px 12px rgba(99, 102, 241, 0.4)',
-                  }}
-                >
-                  {initialLetter}
-                </div>
-              </div>
-            </div>
-          </header>
-          <AnimatedRoutes />
-        </div>
-      </div>
+      <AppLayout
+        currentUser={currentUser}
+        onLogout={handleLogout}
+        onDropDataset={handleDropDataset}
+        dropping={dropping}
+      >
+        <AnimatedRoutes />
+      </AppLayout>
     </Router>
   );
 }
