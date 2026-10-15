@@ -2295,4 +2295,506 @@ tr:hover td {
   white-space: nowrap;
 }
 
+/* ==========================================================================
+   OLAP Terminal Workspace — Enterprise Analytical Query System
+   ========================================================================== */
 
+.olap-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  max-width: 1600px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ── Operation Selector Cards ── */
+.olap-operations-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4);
+}
+
+.olap-op-card {
+  position: relative;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  box-shadow: var(--shadow-sm);
+}
+
+.olap-op-card:hover {
+  border-color: var(--accent-primary);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.olap-op-card--active {
+  border-color: var(--accent-primary);
+  background: #FAFAFF;
+  box-shadow: 0 0 0 1px var(--accent-primary), var(--shadow-md);
+}
+
+.olap-op-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.olap-op-card__icon-wrap {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-subtle);
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.olap-op-card--active .olap-op-card__icon-wrap {
+  background: var(--accent-primary);
+  color: #FFFFFF;
+}
+
+.olap-op-card__title {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.olap-op-card__desc {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ── Two-Column Main Layout: Config / SQL on Left, Results on Right ── */
+.olap-main-grid {
+  display: grid;
+  grid-template-columns: 480px 1fr;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+/* Left Stack */
+.olap-left-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* Configuration Card */
+.olap-config-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.olap-config-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.olap-config-header__title {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.olap-meta-chips {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  background: var(--surface-subtle);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+
+.olap-meta-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
+}
+
+.olap-meta-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+  min-width: 75px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 10px;
+}
+
+.olap-meta-value {
+  color: var(--text-primary);
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  word-break: break-all;
+}
+
+/* Form Controls in OLAP Config */
+.olap-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.olap-form-label {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.olap-form-hint {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-weight: normal;
+}
+
+.olap-select {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  outline: none;
+  transition: all var(--transition-fast);
+}
+
+.olap-select:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-primary-subtle);
+}
+
+.olap-input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  outline: none;
+  transition: all var(--transition-fast);
+}
+
+.olap-input:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-primary-subtle);
+}
+
+.olap-chips-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.olap-chip-btn {
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  border: 1px solid var(--border-default);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+  font-weight: 500;
+}
+
+.olap-chip-btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.olap-chip-btn--active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #FFFFFF;
+}
+
+/* ── SQL Preview Code Editor ── */
+.olap-sql-card {
+  background: #0B0F17;
+  border: 1px solid #1E293B;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+}
+
+.olap-sql-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background: #111827;
+  border-bottom: 1px solid #1F2937;
+}
+
+.olap-window-dots {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.olap-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.olap-dot--red { background: #EF4444; }
+.olap-dot--yellow { background: #F59E0B; }
+.olap-dot--green { background: #10B981; }
+
+.olap-sql-title {
+  color: #94A3B8;
+  font-family: var(--font-mono, monospace);
+  font-size: var(--font-size-xs);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.olap-sql-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.olap-copy-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #E2E8F0;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.olap-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #FFFFFF;
+}
+
+.olap-sql-body {
+  padding: var(--space-4);
+  background: #0B0F17;
+  overflow-x: auto;
+}
+
+.olap-sql-pre {
+  margin: 0;
+  font-family: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.65;
+  color: #E2E8F0;
+  white-space: pre-wrap;
+}
+
+.olap-sql-footer {
+  padding: var(--space-2) var(--space-4);
+  background: #0D121D;
+  border-top: 1px solid #1E293B;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #64748B;
+  font-family: var(--font-mono, monospace);
+}
+
+/* ── Query Execution Control Bar ── */
+.olap-exec-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.olap-exec-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+/* ── Right Results Workspace ── */
+.olap-results-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 580px;
+}
+
+.olap-results-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.olap-results-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.olap-results-title {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.olap-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+}
+
+.olap-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: var(--font-size-xs);
+}
+
+.olap-table th {
+  background: var(--surface-subtle);
+  padding: var(--space-3) var(--space-4);
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 11px;
+  border-bottom: 1px solid var(--border-default);
+  white-space: nowrap;
+}
+
+.olap-table th.align-right,
+.olap-table td.align-right {
+  text-align: right;
+}
+
+.olap-table td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-default);
+  color: var(--text-primary);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.olap-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.olap-table tbody tr:hover {
+  background: #F8FAFC;
+}
+
+.olap-null {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--color-danger-subtle);
+  color: var(--color-danger);
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+}
+
+.olap-results-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-default);
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+/* ── Responsive Adaptations ── */
+@media (max-width: 1200px) {
+  .olap-main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .olap-operations-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .olap-operations-grid {
+    grid-template-columns: 1fr;
+  }
+  .olap-results-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .olap-exec-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
