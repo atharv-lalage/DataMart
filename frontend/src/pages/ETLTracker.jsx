@@ -1,76 +1,115 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-// JSX member expressions from Framer Motion are not recognized by the ESLint parser.
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
-import { Activity, UploadCloud, DatabaseZap, Box, FileSpreadsheet, Play, RefreshCw, CheckCircle, AlertCircle, FolderOpen, ArrowRight } from 'lucide-react';
+import {
+  Activity,
+  UploadCloud,
+  Database,
+  Layers,
+  FileSpreadsheet,
+  Play,
+  CheckCircle2,
+  AlertCircle,
+  FolderOpen,
+  ArrowRight,
+  Clock,
+  Terminal,
+  Copy,
+  Check,
+  RotateCcw,
+  Sparkles,
+  FileText
+} from 'lucide-react';
 import axios from 'axios';
 import API_BASE_URL from '../config';
+import { Button, Card, Badge, PageHeader, EmptyState, Skeleton } from '../components/common/index.js';
 
 const pageVariants = {
-  initial: { opacity: 0, y: 20 },
+  initial: { opacity: 0, y: 12 },
   in: { opacity: 1, y: 0 },
-  out: { opacity: 0, y: -20 }
+  out: { opacity: 0, y: -12 }
 };
 
+// ── 4 Authentic Pipeline Stages mapped to backend _run_etl_job ────────────────
 const STAGES = [
-  { icon: <FileSpreadsheet size={24} color="#6366f1" />, title: "Reading Data", keyword: "EXTRACT" },
-  { icon: <Activity size={24} color="#eab308" />, title: "Fixing Errors", keyword: "TRANSFORM" },
-  { icon: <Box size={24} color="#06b6d4" />, title: "Updating Store", keyword: "LOAD (OLTP)" },
-  { icon: <DatabaseZap size={24} color="#10B981" />, title: "Updating Dashboard", keyword: "LOAD (OLAP)" },
+  {
+    id: 'extract',
+    number: '01',
+    keyword: 'EXTRACT',
+    title: 'Data Extraction',
+    description: 'Reads raw CSV or Excel dataset into memory and normalizes column headers.',
+    icon: FileSpreadsheet,
+    color: '#0284C7',
+    badgeVariant: 'info'
+  },
+  {
+    id: 'transform',
+    number: '02',
+    keyword: 'TRANSFORM',
+    title: 'Cleaning & Transformation',
+    description: 'Filters missing customer IDs, invalid quantities, parses ISO dates, and refreshes cache.',
+    icon: Activity,
+    color: '#4F46E5',
+    badgeVariant: 'purple'
+  },
+  {
+    id: 'load_oltp',
+    number: '03',
+    keyword: 'LOAD (OLTP)',
+    title: 'Transactional Store Load',
+    description: 'Upserts users, products, orders, and order items into relational tables.',
+    icon: Layers,
+    color: '#8B5CF6',
+    badgeVariant: 'default'
+  },
+  {
+    id: 'load_olap',
+    number: '04',
+    keyword: 'LOAD (OLAP)',
+    title: 'Data Warehouse Load',
+    description: 'Populates snowflake dimension tables and fact_sales for analytical processing.',
+    icon: Database,
+    color: '#10B981',
+    badgeVariant: 'success'
+  },
 ];
 
 export default function ETLTracker() {
   const navigate = useNavigate();
   const [jobId, setJobId] = useState(null);
-  const [status, setStatus] = useState('idle'); // idle | running | complete | error
+  const [status, setStatus] = useState('idle'); // 'idle' | 'running' | 'complete' | 'error'
   const [logs, setLogs] = useState([]);
   const [activeStage, setActiveStage] = useState(-1);
-  const [stats, setStats] = useState({ totalRows: '-', errorsFixed: '-', tablesUpdated: 4 });
+  const [stats, setStats] = useState({ totalRows: '—', errorsFixed: '—', cleanRows: '—', tablesUpdated: '8' });
+  const [copiedLogs, setCopiedLogs] = useState(false);
+
   const pollRef = useRef(null);
   const logEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
   // Upload state
-  const [uploadStatus, setUploadStatus] = useState(null); // null | uploading | success | error
+  const [uploadStatus, setUploadStatus] = useState(null); // null | 'uploading' | 'success' | 'error'
   const [uploadMsg, setUploadMsg] = useState('');
   const [datasetFiles, setDatasetFiles] = useState([]);
+  const [loadingFiles, setLoadingFiles] = useState(true);
   const [dragOver, setDragOver] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
 
-  useEffect(() => {
-    // Load dataset info on mount
+  // Load dataset info
+  const fetchDatasetInfo = useCallback(() => {
+    setLoadingFiles(true);
     axios.get(`${API_BASE_URL}/api/dataset/info`)
       .then(res => setDatasetFiles(res.data.files || []))
-      .catch(() => {});
-  }, [uploadStatus]);
+      .catch(() => setDatasetFiles([]))
+      .finally(() => setLoadingFiles(false));
+  }, []);
 
-  const handleUpload = async (file) => {
-    if (!file) return;
-    const allowed = ['xlsx', 'xls', 'csv'];
-    const ext = file.name.split('.').pop().toLowerCase();
-    if (!allowed.includes(ext)) {
-      setUploadStatus('error');
-      setUploadMsg('Only .xlsx, .xls, or .csv files allowed.');
-      return;
-    }
+  useEffect(() => {
+    fetchDatasetInfo();
+  }, [fetchDatasetInfo, uploadStatus]);
 
-    setUploadStatus('uploading');
-    setUploadMsg('');
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      const res = await axios.post(`${API_BASE_URL}/api/dataset/upload`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      setUploadStatus('success');
-      setUploadMsg(res.data.message);
-    } catch (err) {
-      setUploadStatus('error');
-      setUploadMsg(err.response?.data?.error || 'Upload failed.');
-    }
-  };
-
+  // Derive active stage based on log keywords
   const deriveStage = (logLines) => {
     let stage = -1;
     logLines.forEach(line => {
@@ -81,28 +120,65 @@ export default function ETLTracker() {
     return stage;
   };
 
+  // Upload handler
+  const handleUpload = async (file) => {
+    if (!file) return;
+    const allowed = ['xlsx', 'xls', 'csv'];
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!allowed.includes(ext)) {
+      setUploadStatus('error');
+      setUploadMsg('Unsupported file format. Only .xlsx, .xls, or .csv files are allowed.');
+      return;
+    }
+
+    setSelectedFile(file);
+    setUploadStatus('uploading');
+    setUploadMsg('');
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await axios.post(`${API_BASE_URL}/api/dataset/upload`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setUploadStatus('success');
+      setUploadMsg(res.data.message || `File "${file.name}" uploaded successfully.`);
+      fetchDatasetInfo();
+    } catch (err) {
+      setUploadStatus('error');
+      setUploadMsg(err.response?.data?.error || err.response?.data?.detail || 'Upload failed.');
+    }
+  };
+
+  // Run ETL pipeline
   const startETL = async () => {
+    if (status === 'running') return;
+
     setStatus('running');
     setLogs([]);
     setActiveStage(-1);
     setJobId(null);
+    setStats({ totalRows: '—', errorsFixed: '—', cleanRows: '—', tablesUpdated: '8' });
 
     try {
       const res = await axios.post(`${API_BASE_URL}/api/etl/run`);
       const id = res.data.job_id;
       setJobId(id);
 
-      // Start polling
+      // Start polling status
       pollRef.current = setInterval(async () => {
         try {
           const poll = await axios.get(`${API_BASE_URL}/api/etl/status/${id}`);
           const { status: s, logs: l } = poll.data;
           setLogs(l || []);
           setActiveStage(deriveStage(l || []));
-          
+
+          // Derive cleaning statistics from logs
           setStats(prev => {
             let tr = prev.totalRows;
             let ef = prev.errorsFixed;
+            let cr = prev.cleanRows;
+
             for (let line of l || []) {
               if (line.includes('Original shape:')) {
                 const match = line.match(/\((\d+)/);
@@ -110,18 +186,21 @@ export default function ETLTracker() {
               }
               if (line.includes('Loaded') && line.includes('rows after cleaning')) {
                 const match = line.match(/Loaded (\d+) rows/);
-                if (match && tr !== '-') {
-                  const cleanRows = parseInt(match[1]);
-                  const originalRows = parseInt(tr.replace(/,/g, ''));
-                  if (originalRows > cleanRows) {
-                    ef = (originalRows - cleanRows).toLocaleString();
-                  } else {
-                    ef = '0';
+                if (match) {
+                  const cleanCount = parseInt(match[1]);
+                  cr = cleanCount.toLocaleString();
+                  if (tr !== '—') {
+                    const originalCount = parseInt(tr.replace(/,/g, ''));
+                    if (originalCount >= cleanCount) {
+                      ef = (originalCount - cleanCount).toLocaleString();
+                    } else {
+                      ef = '0';
+                    }
                   }
                 }
               }
             }
-            return { ...prev, totalRows: tr, errorsFixed: ef };
+            return { ...prev, totalRows: tr, errorsFixed: ef, cleanRows: cr };
           });
 
           if (s === 'complete' || s === 'error') {
@@ -129,242 +208,526 @@ export default function ETLTracker() {
             clearInterval(pollRef.current);
           }
         } catch (err) {
-          // If the backend was restarted, the job ID is gone → 404
           if (err.response && err.response.status === 404) {
             clearInterval(pollRef.current);
             setStatus('error');
-            setLogs(prev => [...prev, 'ERROR: Server was restarted and lost the job — please click Clean Data again.']);
+            setLogs(prev => [...prev, 'ERROR: Server session lost the active job. Please click Run ETL Pipeline to restart.']);
           }
-          // other network glitches: keep polling silently
         }
       }, 2000);
     } catch (err) {
       setStatus('error');
-      setLogs([`ERROR: Could not reach backend — ${err.message}`]);
+      const errorDetail = err.response?.data?.detail || err.response?.data?.error || err.message;
+      setLogs([`ERROR: Could not initiate ETL pipeline — ${errorDetail}`]);
     }
   };
 
-  // Scroll log to bottom as lines appear
+  // Auto scroll log to bottom
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
-  // Cleanup on unmount
+  // Clean up polling timer
   useEffect(() => () => clearInterval(pollRef.current), []);
 
-  const logColor = (line) => {
-    if (line.startsWith('ERROR')) return '#ef4444';
-    if (line.startsWith('WARNING')) return '#eab308';
-    if (line.includes('COMPLETE')) return '#10B981';
-    if (line.startsWith('EXTRACT')) return '#38bdf8';
-    if (line.startsWith('TRANSFORM')) return '#10B981';
-    if (line.startsWith('LOAD')) return '#c586c0';
-    return '#94a3b8';
+  // Format log entry tags
+  const getLogTag = (line) => {
+    if (line.startsWith('ERROR')) return { text: 'ERROR', color: '#EF4444', bg: 'rgba(239,68,68,0.15)' };
+    if (line.startsWith('WARNING')) return { text: 'WARN', color: '#F59E0B', bg: 'rgba(245,158,11,0.15)' };
+    if (line.includes('COMPLETE') || line.includes('Loaded')) return { text: 'SUCCESS', color: '#10B981', bg: 'rgba(16,185,129,0.15)' };
+    if (line.startsWith('EXTRACT')) return { text: 'EXTRACT', color: '#38BDF8', bg: 'rgba(56,189,248,0.15)' };
+    if (line.startsWith('TRANSFORM')) return { text: 'TRANSFORM', color: '#818CF8', bg: 'rgba(129,140,248,0.15)' };
+    if (line.startsWith('LOAD')) return { text: 'LOAD', color: '#C084FC', bg: 'rgba(192,132,252,0.15)' };
+    if (line.startsWith('INFO')) return { text: 'INFO', color: '#94A3B8', bg: 'rgba(148,163,184,0.15)' };
+    return { text: 'SYSTEM', color: '#64748B', bg: 'rgba(100,116,139,0.15)' };
   };
+
+  const copyLogsToClipboard = () => {
+    if (!logs.length) return;
+    navigator.clipboard.writeText(logs.join('\n'));
+    setCopiedLogs(true);
+    setTimeout(() => setCopiedLogs(false), 2000);
+  };
+
+  const activeDataset = datasetFiles.length > 0 ? datasetFiles[datasetFiles.length - 1] : null;
 
   return (
     <motion.div className="container" initial="initial" animate="in" exit="out" variants={pageVariants}>
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <h1>Data Cleaner</h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem' }}>
-            <p style={{ margin: 0 }}>Watch how messy data is cleaned up behind the scenes.</p>
-            {datasetFiles.length > 0 && (
-              <motion.span
-                initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '6px',
-                  background: 'rgba(99,102,241,0.1)',
-                  border: '1px solid rgba(99,102,241,0.35)',
-                  color: '#a5b4fc',
-                  padding: '3px 10px', borderRadius: '20px',
-                  fontSize: '0.78rem', fontWeight: 600, fontFamily: 'monospace'
-                }}
-              >
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981', display: 'inline-block' }} />
-                {datasetFiles[datasetFiles.length - 1].name}
-              </motion.span>
-            )}
-          </div>
-        </div>
-        <button
-          className="btn btn-primary"
-          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-          onClick={startETL}
-          disabled={status === 'running'}
-        >
-          {status === 'running'
-            ? <><RefreshCw size={16} className="spin" /> Processing...</>
-            : <><Play size={16} fill="currentColor" /> Clean Data</>
+      <div className="etl-layout">
+
+        {/* ── Section A: Page Header ───────────────────────────────────────── */}
+        <PageHeader
+          title="ETL Pipeline"
+          subtitle="Ingest, clean, transform, and load your data warehouse."
+          badge={
+            activeDataset ? (
+              <Badge variant="success" withDot>
+                {activeDataset.name} ({activeDataset.size_mb} MB)
+              </Badge>
+            ) : (
+              <Badge variant="warning" withDot>
+                No active dataset
+              </Badge>
+            )
           }
-        </button>
-      </div>
+          actions={
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <Button
+                variant="outline"
+                size="sm"
+                icon={<RotateCcw size={14} />}
+                onClick={fetchDatasetInfo}
+                disabled={status === 'running'}
+                title="Refresh dataset status"
+              >
+                Refresh
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<Play size={15} fill="currentColor" />}
+                onClick={startETL}
+                loading={status === 'running'}
+                disabled={status === 'running' || !datasetFiles.length}
+              >
+                {status === 'running' ? 'Processing Pipeline...' : 'Run ETL Pipeline'}
+              </Button>
+            </div>
+          }
+        />
 
-      {/* Dataset Upload Panel */}
-      <div className="glass-panel" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
-        <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
-          <FolderOpen size={18} color="var(--accent-primary)" /> Upload Sales Data
-        </h3>
+        {/* ── Section B: Upload Dataset & Active Repository Cards ───────────── */}
+        <div className="etl-two-col">
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', alignItems: 'start' }}>
-
-          {/* Drop zone */}
-          <div
-            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={e => { e.preventDefault(); setDragOver(false); handleUpload(e.dataTransfer.files[0]); }}
-            onClick={() => fileInputRef.current?.click()}
-            style={{
-              border: `2px dashed ${dragOver ? '#6366f1' : 'rgba(255,255,255,0.15)'}`,
-              borderRadius: '10px', padding: '2rem', textAlign: 'center', cursor: 'pointer',
-              background: dragOver ? 'rgba(99,102,241,0.08)' : 'rgba(0,0,0,0.2)',
-              transition: 'all 0.2s'
-            }}
+          {/* Upload Card */}
+          <Card
+            title="Upload Dataset"
+            subtitle="Ingest sales transactions into tenant-isolated storage"
+            icon={<UploadCloud size={18} color="#4F46E5" />}
           >
-            <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }}
-              onChange={e => handleUpload(e.target.files[0])} />
-            <UploadCloud size={32} color={dragOver ? '#6366f1' : '#94a3b8'} style={{ marginBottom: '0.75rem' }} />
-            <div style={{ color: 'var(--text-main)', fontWeight: 500, marginBottom: '0.25rem' }}>
-              {uploadStatus === 'uploading' ? 'Uploading...' : 'Drop your dataset here'}
-            </div>
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-              or click to browse — .xlsx, .xls, .csv supported
+            <div
+              className={`etl-upload-zone ${dragOver ? 'etl-upload-zone--dragover' : ''}`}
+              onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={e => {
+                e.preventDefault();
+                setDragOver(false);
+                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                  handleUpload(e.dataTransfer.files[0]);
+                }
+              }}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,.xlsx,.xls"
+                style={{ display: 'none' }}
+                onChange={e => {
+                  if (e.target.files && e.target.files[0]) {
+                    handleUpload(e.target.files[0]);
+                  }
+                }}
+              />
+
+              <div className="etl-upload-zone__icon-box">
+                <UploadCloud size={26} />
+              </div>
+
+              <div className="etl-upload-zone__title">
+                {uploadStatus === 'uploading' ? 'Streaming dataset to storage...' : 'Drop your dataset file here'}
+              </div>
+
+              <div className="etl-upload-zone__desc">
+                Drag and drop your file or click to browse from your computer
+              </div>
+
+              <div className="etl-upload-zone__formats">
+                <Badge variant="default" size="sm">.CSV</Badge>
+                <Badge variant="default" size="sm">.XLSX</Badge>
+                <Badge variant="default" size="sm">.XLS</Badge>
+              </div>
             </div>
 
+            {/* Validation / Status alerts */}
             <AnimatePresence>
-              {uploadStatus && uploadStatus !== 'uploading' && (
-                <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                  style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                    color: uploadStatus === 'success' ? '#10B981' : '#ef4444', fontSize: '0.85rem' }}>
-                  {uploadStatus === 'success' ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
-                  {uploadMsg}
+              {uploadStatus && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  style={{ marginTop: '0.75rem' }}
+                >
+                  {uploadStatus === 'success' && (
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: '0.5rem',
+                      padding: '0.65rem 0.85rem', borderRadius: '8px',
+                      backgroundColor: 'var(--color-success-subtle)',
+                      border: '1px solid var(--color-success-border)',
+                      color: 'var(--color-success-hover)', fontSize: '0.8125rem'
+                    }}>
+                      <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
+                      <span>{uploadMsg}</span>
+                    </div>
+                  )}
+
+                  {uploadStatus === 'error' && (
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: '0.5rem',
+                      padding: '0.65rem 0.85rem', borderRadius: '8px',
+                      backgroundColor: 'var(--color-danger-subtle)',
+                      border: '1px solid var(--color-danger-border)',
+                      color: 'var(--color-danger-hover)', fontSize: '0.8125rem'
+                    }}>
+                      <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                      <span>{uploadMsg}</span>
+                    </div>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
+          </Card>
 
-          {/* Current files */}
-          <div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Files in dataset/
-            </div>
-            {datasetFiles.length === 0 ? (
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No dataset files found.</div>
-            ) : (
+          {/* Dataset Repository Card */}
+          <Card
+            title="Storage Repository"
+            subtitle="Datasets stored in your tenant-isolated directory"
+            icon={<FolderOpen size={18} color="#0284C7" />}
+          >
+            {loadingFiles ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {datasetFiles.map((f, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)',
-                    borderRadius: '8px', padding: '0.6rem 1rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <FileSpreadsheet size={16} color="#6366f1" />
-                      <span style={{ fontSize: '0.88rem', fontWeight: 500 }}>{f.name}</span>
+                <Skeleton variant="rectangular" height="52px" />
+                <Skeleton variant="rectangular" height="52px" />
+              </div>
+            ) : datasetFiles.length === 0 ? (
+              <EmptyState
+                title="No Datasets in Storage"
+                description="Upload an e-commerce sales dataset (.csv or .xlsx) to initialize pipeline ingestion."
+              />
+            ) : (
+              <div className="etl-file-list">
+                {datasetFiles.map((file, idx) => {
+                  const isActive = idx === datasetFiles.length - 1;
+                  const isCsv = file.name.endsWith('.csv');
+                  return (
+                    <div
+                      key={file.name}
+                      className={`etl-file-item ${isActive ? 'etl-file-item--active' : ''}`}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden' }}>
+                        <div style={{
+                          width: 36, height: 36, borderRadius: '8px',
+                          backgroundColor: isCsv ? '#EEF2FF' : '#ECFDF5',
+                          color: isCsv ? '#4F46E5' : '#10B981',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          flexShrink: 0
+                        }}>
+                          <FileText size={18} />
+                        </div>
+                        <div style={{ overflow: 'hidden' }}>
+                          <div style={{
+                            fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-primary)',
+                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                          }}>
+                            {file.name}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                            {file.size_mb} MB · Tabular Dataset
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+                        {isActive ? (
+                          <Badge variant="success" size="sm" withDot>Active Source</Badge>
+                        ) : (
+                          <Badge variant="default" size="sm">Archived</Badge>
+                        )}
+                      </div>
                     </div>
-                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{f.size_mb} MB</span>
-                  </div>
-                ))}
+                  );
+                })}
+
+                <div style={{
+                  marginTop: '0.75rem', padding: '0.65rem 0.85rem',
+                  backgroundColor: 'var(--surface-subtle)', borderRadius: '8px',
+                  border: '1px solid var(--border-default)',
+                  fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.5
+                }}>
+                  When a new dataset is uploaded, previous pickle caches are automatically purged. Click <strong>Run ETL Pipeline</strong> to execute full schema loads.
+                </div>
               </div>
             )}
-            <div style={{ marginTop: '0.75rem', fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              After uploading a new file, click <strong style={{ color: 'white' }}>Clean Data</strong> to process it.
-              The old pickle cache is automatically cleared on upload.
-            </div>
-          </div>
+          </Card>
 
         </div>
-      </div>
 
-      <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr 2fr' }}>
+        {/* ── Section C: Pipeline Progress Stepper Card ────────────────────── */}
+        <Card
+          title="Pipeline Execution Stages"
+          subtitle="Real-time progress tracker across all extraction, transformation, and loading phases"
+          icon={<Layers size={18} color="#8B5CF6" />}
+          actions={
+            status !== 'idle' ? (
+              <Badge
+                variant={status === 'complete' ? 'success' : status === 'error' ? 'danger' : 'purple'}
+                withDot
+              >
+                {status === 'running' ? 'Pipeline in Progress' : status === 'complete' ? 'Pipeline Succeeded' : 'Pipeline Failed'}
+              </Badge>
+            ) : null
+          }
+        >
+          <div className="etl-stepper">
+            {STAGES.map((stage, idx) => {
+              const isPast = activeStage > idx;
+              const isCurrent = activeStage === idx;
+              const isPending = activeStage < idx;
+              const isError = status === 'error' && isCurrent;
 
-        {/* Left: Stage tracker */}
-        <div className="glass-panel" style={{ padding: '2rem' }}>
-          <h3 style={{ marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <UploadCloud size={20} color="var(--accent-primary)" /> Progress
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0rem' }}>
-            {STAGES.map((stage, index) => {
-              const active = activeStage >= index;
+              const StageIcon = stage.icon;
+
+              let stepStateClass = '';
+              if (isPast || (status === 'complete' && isCurrent)) {
+                stepStateClass = 'etl-step--completed';
+              } else if (isError) {
+                stepStateClass = 'etl-step--error';
+              } else if (isCurrent) {
+                stepStateClass = 'etl-step--active';
+              }
+
               return (
-                <div key={index} style={{ display: 'flex', opacity: status === 'idle' ? 0.4 : active ? 1 : 0.35, transition: 'opacity 0.5s ease' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginRight: '1.5rem' }}>
-                    <div style={{
-                      width: 48, height: 48, borderRadius: '50%',
-                      background: active ? 'rgba(255,255,255,0.1)' : 'transparent',
-                      border: `2px solid ${active ? 'var(--glass-border)' : 'rgba(255,255,255,0.1)'}`,
-                      display: 'flex', justifyContent: 'center', alignItems: 'center'
-                    }}>
-                      {stage.icon}
-                    </div>
-                    {index < STAGES.length - 1 && (
-                      <div style={{ width: 2, height: 60, background: activeStage >= index + 1 ? '#10B981' : 'rgba(255,255,255,0.1)', margin: '0.5rem 0', transition: 'background 1s' }}></div>
+                <div key={stage.id} className={`etl-step ${stepStateClass}`}>
+                  {idx < STAGES.length - 1 && <div className="etl-step__connector" />}
+
+                  <div className="etl-step__indicator">
+                    {isPast || (status === 'complete' && isCurrent) ? (
+                      <CheckCircle2 size={20} color="#10B981" />
+                    ) : isError ? (
+                      <AlertCircle size={20} color="#EF4444" />
+                    ) : isCurrent && status === 'running' ? (
+                      <div className="ui-btn__spinner" style={{ width: 18, height: 18, border: '2px solid #CBD5E1', borderTopColor: stage.color, borderRadius: '50%' }} />
+                    ) : (
+                      <StageIcon size={18} color={isPending ? '#94A3B8' : stage.color} />
                     )}
                   </div>
-                  <div style={{ paddingTop: '0.5rem' }}>
-                    <h4 style={{ color: active ? 'white' : 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '1rem' }}>{stage.title}</h4>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{stage.keyword}</p>
+
+                  <div className="etl-step__content">
+                    <div className="etl-step__header">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontSize: '0.75rem', fontFamily: 'monospace', color: '#94A3B8', fontWeight: 600 }}>
+                          STAGE {stage.number}
+                        </span>
+                        <h4 className="etl-step__title">{stage.title}</h4>
+                      </div>
+
+                      <div>
+                        {isPast || (status === 'complete' && isCurrent) ? (
+                          <Badge variant="success" size="sm">Completed</Badge>
+                        ) : isError ? (
+                          <Badge variant="danger" size="sm">Failed</Badge>
+                        ) : isCurrent && status === 'running' ? (
+                          <Badge variant={stage.badgeVariant} size="sm" withDot>Active</Badge>
+                        ) : (
+                          <Badge variant="default" size="sm">Pending</Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    <p className="etl-step__desc">{stage.description}</p>
                   </div>
                 </div>
               );
             })}
           </div>
+        </Card>
 
-          {status !== 'idle' && (
-            <div style={{ marginTop: '1.5rem', padding: '0.75rem 1rem', borderRadius: '6px', background: status === 'complete' ? 'rgba(16,185,129,0.1)' : status === 'error' ? 'rgba(239,68,68,0.1)' : 'rgba(99,102,241,0.1)', border: `1px solid ${status === 'complete' ? 'rgba(16,185,129,0.3)' : status === 'error' ? 'rgba(239,68,68,0.3)' : 'rgba(99,102,241,0.3)'}`, fontSize: '0.85rem', color: status === 'complete' ? '#10B981' : status === 'error' ? '#ef4444' : 'var(--accent-primary)', textAlign: 'center', fontWeight: 600 }}>
-              {status === 'running' ? '● Pipeline in progress...' : status === 'complete' ? '✓ Data cleaning finished!' : '✗ Error cleaning data'}
+        {/* ── Section D: Data Cleaning & Transformation Details ─────────────── */}
+        <div className="etl-metrics-grid">
+          <div className="etl-metric-box">
+            <span className="etl-metric-box__label">Total Ingested Rows</span>
+            <span className="etl-metric-box__value">{stats.totalRows}</span>
+            <span className="etl-metric-box__sub">Raw records from dataset source</span>
+          </div>
+
+          <div className="etl-metric-box">
+            <span className="etl-metric-box__label">Cleaned / Filtered Rows</span>
+            <span className="etl-metric-box__value" style={{ color: '#F59E0B' }}>
+              {stats.errorsFixed}
+            </span>
+            <span className="etl-metric-box__sub">Null IDs & negative quantities pruned</span>
+          </div>
+
+          <div className="etl-metric-box">
+            <span className="etl-metric-box__label">Warehouse Fact Records</span>
+            <span className="etl-metric-box__value" style={{ color: '#10B981' }}>
+              {stats.cleanRows}
+            </span>
+            <span className="etl-metric-box__sub">Validated records loaded into DataMart</span>
+          </div>
+
+          <div className="etl-metric-box">
+            <span className="etl-metric-box__label">Schema Tables Synced</span>
+            <span className="etl-metric-box__value" style={{ color: '#4F46E5' }}>
+              {stats.tablesUpdated}
+            </span>
+            <span className="etl-metric-box__sub">4 OLTP + 4 Snowflake Star Dimensions</span>
+          </div>
+        </div>
+
+        {/* ── Section E: Pipeline Execution Logs Viewer ────────────────────── */}
+        <div className="etl-terminal">
+          <div className="etl-terminal__header">
+            <div className="etl-terminal__title">
+              <Terminal size={14} color="#38BDF8" />
+              <span>Pipeline Process Logs</span>
+              {jobId && (
+                <span style={{
+                  padding: '2px 8px', borderRadius: '4px',
+                  backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                  color: '#38BDF8', fontSize: '0.6875rem'
+                }}>
+                  Job #{jobId}
+                </span>
+              )}
             </div>
-          )}
 
-          {status === 'complete' && (
-            <motion.button 
-              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-              className="btn btn-primary" 
-              style={{ width: '100%', marginTop: '1rem', display: 'flex', justifyContent: 'center', gap: '0.5rem', padding: '0.75rem' }}
-              onClick={() => navigate('/dashboard')}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontSize: '0.6875rem', color: '#64748B', fontFamily: 'monospace' }}>
+                {logs.length} entries
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={copiedLogs ? <Check size={13} color="#10B981" /> : <Copy size={13} />}
+                onClick={copyLogsToClipboard}
+                disabled={!logs.length}
+                style={{ color: '#94A3B8', padding: '4px 8px', height: '28px' }}
+                title="Copy all logs to clipboard"
+              >
+                {copiedLogs ? 'Copied' : 'Copy'}
+              </Button>
+            </div>
+          </div>
+
+          <div className="etl-terminal__body">
+            {status === 'idle' && !logs.length ? (
+              <div className="etl-terminal__empty">
+                [ Pipeline idle — upload a dataset and click "Run ETL Pipeline" to begin execution ]
+              </div>
+            ) : (
+              logs.map((line, idx) => {
+                const tag = getLogTag(line);
+                return (
+                  <div key={idx} className="etl-terminal__line">
+                    <span
+                      className="etl-terminal__tag"
+                      style={{ color: tag.color, backgroundColor: tag.bg }}
+                    >
+                      {tag.text}
+                    </span>
+                    <span style={{ color: line.startsWith('ERROR') ? '#F87171' : line.startsWith('WARNING') ? '#FBBF24' : '#E2E8F0' }}>
+                      {line}
+                    </span>
+                  </div>
+                );
+              })
+            )}
+
+            {status === 'running' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#818CF8', marginTop: '4px' }}>
+                <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>◓</span>
+                <span style={{ fontSize: '0.75rem' }}>Processing stage tasks...</span>
+              </div>
+            )}
+            <div ref={logEndRef} />
+          </div>
+        </div>
+
+        {/* ── Section F: Pipeline Results / Next Actions Banner ────────────── */}
+        {status === 'complete' && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="etl-result-banner etl-result-banner--success"
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div style={{
+                width: 44, height: 44, borderRadius: '50%',
+                backgroundColor: 'var(--color-success-subtle)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: 'var(--color-success)', flexShrink: 0
+              }}>
+                <CheckCircle2 size={24} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+                  Data Warehouse Synchronized Successfully
+                </h3>
+                <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
+                  {stats.cleanRows !== '—' ? `${stats.cleanRows} transaction facts` : 'Dataset'} loaded across all operational and analytical schemas.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <Button
+                variant="outline"
+                size="sm"
+                icon={<ArrowRight size={14} />}
+                iconPosition="right"
+                onClick={() => navigate('/terminal')}
+              >
+                OLAP Terminal
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<ArrowRight size={14} />}
+                iconPosition="right"
+                onClick={() => navigate('/dashboard')}
+              >
+                Go to Dashboard
+              </Button>
+            </div>
+          </motion.div>
+        )}
+
+        {status === 'error' && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="etl-result-banner etl-result-banner--error"
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div style={{
+                width: 44, height: 44, borderRadius: '50%',
+                backgroundColor: 'var(--color-danger-subtle)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: 'var(--color-danger)', flexShrink: 0
+              }}>
+                <AlertCircle size={24} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+                  Pipeline Execution Failed
+                </h3>
+                <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
+                  Review the execution logs above for diagnostic stack traces.
+                </p>
+              </div>
+            </div>
+
+            <Button
+              variant="danger"
+              size="sm"
+              icon={<RotateCcw size={14} />}
+              onClick={startETL}
             >
-              Go to Dashboard <ArrowRight size={16} />
-            </motion.button>
-          )}
-        </div>
-
-        {/* Right: Log terminal + metrics */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          <div className="glass-panel" style={{ padding: '0', overflow: 'hidden' }}>
-            <div style={{ background: '#0a0b10', padding: '1rem 1.5rem', borderBottom: '1px solid #1f2937', color: 'var(--text-muted)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Activity Logs {jobId && <span style={{ marginLeft: '1rem', color: '#6366f1' }}>Job #{jobId}</span>}
-            </div>
-            <div style={{ padding: '1.5rem', background: '#0d0f17', fontFamily: 'monospace', fontSize: '0.85rem', minHeight: '300px', maxHeight: '360px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-              {status === 'idle' ? (
-                <div style={{ color: '#4b5563' }}>[ Pipeline idle — press Clean Data to begin ]</div>
-              ) : (
-                logs.map((line, i) => (
-                  <div key={i} style={{ color: logColor(line) }}>{line}</div>
-                ))
-              )}
-              {status === 'running' && (
-                <div style={{ color: '#6366f1', animation: 'pulse 1s infinite' }}>▌</div>
-              )}
-              <div ref={logEndRef} />
-            </div>
-          </div>
-
-          <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
-            <div className="glass-panel stat-card" style={{ padding: '1rem 1.5rem' }}>
-              <h3 style={{ fontSize: '0.85rem' }}>Total Rows Read</h3>
-              <div className="value" style={{ fontSize: '1.5rem' }}>{stats.totalRows}</div>
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Pre-transformation</span>
-            </div>
-            <div className="glass-panel stat-card" style={{ padding: '1rem 1.5rem' }}>
-              <h3 style={{ fontSize: '0.85rem' }}>Errors Fixed</h3>
-              <div className="value" style={{ fontSize: '1.5rem', color: '#eab308' }}>{stats.errorsFixed}</div>
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Noise filter algorithm</span>
-            </div>
-            <div className="glass-panel stat-card" style={{ padding: '1rem 1.5rem' }}>
-              <h3 style={{ fontSize: '0.85rem' }}>Tables Updated</h3>
-              <div className="value" style={{ fontSize: '1.5rem', color: '#10B981' }}>{stats.tablesUpdated}</div>
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Into Snowflake Schema</span>
-            </div>
-          </div>
-        </div>
+              Retry Pipeline
+            </Button>
+          </motion.div>
+        )}
 
       </div>
     </motion.div>

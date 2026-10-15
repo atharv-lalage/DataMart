@@ -1573,3 +1573,387 @@ tr:hover td {
   align-items: center;
   min-height: 50vh;
 }
+
+/* ==========================================================================
+   ETL Pipeline & Data Cleaner Enterprise Styles
+   ========================================================================== */
+
+.etl-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.etl-two-col {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-6);
+}
+
+@media (max-width: 1024px) {
+  .etl-two-col {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Upload Drag-and-Drop Zone ────────────────────────────────────────────── */
+.etl-upload-zone {
+  border: 2px dashed var(--border-default);
+  border-radius: var(--radius-card);
+  padding: var(--space-8) var(--space-6);
+  text-align: center;
+  cursor: pointer;
+  background-color: var(--surface-hover);
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.etl-upload-zone:hover {
+  border-color: var(--accent-primary);
+  background-color: var(--accent-primary-subtle);
+}
+
+.etl-upload-zone--dragover {
+  border-color: var(--accent-primary);
+  background-color: var(--accent-primary-subtle);
+  transform: scale(0.99);
+}
+
+.etl-upload-zone__icon-box {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background-color: #FFFFFF;
+  border: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-primary);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: var(--space-2);
+}
+
+.etl-upload-zone__title {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.etl-upload-zone__desc {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.etl-upload-zone__formats {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+/* ── Selected File Preview Card ───────────────────────────────────────────── */
+.etl-selected-file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-subtle);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  margin-top: var(--space-4);
+  gap: var(--space-3);
+}
+
+.etl-selected-file__info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  overflow: hidden;
+}
+
+.etl-selected-file__name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.etl-selected-file__size {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+}
+
+/* ── Dataset Files List ───────────────────────────────────────────────────── */
+.etl-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.etl-file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  transition: border-color 0.15s ease;
+}
+
+.etl-file-item:hover {
+  border-color: var(--border-strong);
+}
+
+.etl-file-item--active {
+  background-color: var(--accent-primary-subtle);
+  border-color: rgba(79, 70, 229, 0.3);
+}
+
+/* ── Pipeline Stepper ─────────────────────────────────────────────────────── */
+.etl-stepper {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+  padding: var(--space-2) 0;
+}
+
+.etl-step {
+  display: flex;
+  align-items: flex-start;
+  position: relative;
+  padding-bottom: var(--space-6);
+}
+
+.etl-step:last-child {
+  padding-bottom: 0;
+}
+
+.etl-step__connector {
+  position: absolute;
+  top: 40px;
+  left: 20px;
+  bottom: 0;
+  width: 2px;
+  background-color: var(--border-default);
+  transition: background-color 0.3s ease;
+}
+
+.etl-step--completed .etl-step__connector {
+  background-color: var(--color-success);
+}
+
+.etl-step--active .etl-step__connector {
+  background: linear-gradient(to bottom, var(--accent-primary) 0%, var(--border-default) 100%);
+}
+
+.etl-step__indicator {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 2px solid var(--border-default);
+  background-color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: var(--space-4);
+  flex-shrink: 0;
+  z-index: 1;
+  transition: all 0.25s ease;
+}
+
+.etl-step--completed .etl-step__indicator {
+  border-color: var(--color-success);
+  background-color: var(--color-success-subtle);
+  color: var(--color-success);
+}
+
+.etl-step--active .etl-step__indicator {
+  border-color: var(--accent-primary);
+  background-color: var(--accent-primary-subtle);
+  color: var(--accent-primary);
+  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.15);
+}
+
+.etl-step--error .etl-step__indicator {
+  border-color: var(--color-danger);
+  background-color: var(--color-danger-subtle);
+  color: var(--color-danger);
+}
+
+.etl-step__content {
+  flex: 1;
+  padding-top: var(--space-1);
+}
+
+.etl-step__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.etl-step__title {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.etl-step__desc {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* ── Cleaning & Transformation Metrics ────────────────────────────────────── */
+.etl-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+@media (max-width: 1024px) {
+  .etl-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .etl-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.etl-metric-box {
+  padding: var(--space-4) var(--space-5);
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.etl-metric-box__label {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.etl-metric-box__value {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.etl-metric-box__sub {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+}
+
+/* ── Dark Monospace Terminal Viewer ───────────────────────────────────────── */
+.etl-terminal {
+  background-color: #0F172A;
+  border: 1px solid #1E293B;
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.2);
+  display: flex;
+  flex-direction: column;
+}
+
+.etl-terminal__header {
+  background-color: #0B1120;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid #1E293B;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.etl-terminal__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: #94A3B8;
+  font-size: var(--font-size-xs);
+  font-family: monospace;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.etl-terminal__body {
+  padding: var(--space-4) var(--space-5);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  min-height: 320px;
+  max-height: 420px;
+  overflow-y: auto;
+  color: #E2E8F0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.etl-terminal__empty {
+  color: #64748B;
+  padding: var(--space-8) 0;
+  text-align: center;
+  font-style: italic;
+}
+
+.etl-terminal__line {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  word-break: break-word;
+}
+
+.etl-terminal__tag {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+/* ── Result Summary Banner ────────────────────────────────────────────────── */
+.etl-result-banner {
+  padding: var(--space-5);
+  border-radius: var(--radius-card);
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.etl-result-banner--success {
+  border-color: var(--color-success-border);
+  background: linear-gradient(to right, var(--color-success-subtle), #FFFFFF);
+}
+
+.etl-result-banner--error {
+  border-color: var(--color-danger-border);
+  background: linear-gradient(to right, var(--color-danger-subtle), #FFFFFF);
+}
+
