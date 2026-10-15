@@ -68,17 +68,33 @@ export function formatCurrency(value, symbol = '', options = {}) {
     return symbol ? `${symbol}0.00` : '0.00';
   }
 
-  const {
-    minimumFractionDigits = 2,
-    maximumFractionDigits = 2,
-  } = options;
+  let min = options.minimumFractionDigits;
+  let max = options.maximumFractionDigits;
 
-  const numFormatted = Number(value).toLocaleString(undefined, {
-    minimumFractionDigits,
-    maximumFractionDigits,
-  });
+  if (max !== undefined && min === undefined) {
+    min = Math.min(2, max);
+  } else if (min !== undefined && max === undefined) {
+    max = Math.max(2, min);
+  } else if (min === undefined && max === undefined) {
+    min = 2;
+    max = 2;
+  }
 
-  return symbol ? `${symbol}${numFormatted}` : numFormatted;
+  // Ensure min <= max to avoid Intl RangeError
+  if (min > max) {
+    min = max;
+  }
+
+  try {
+    const numFormatted = Number(value).toLocaleString(undefined, {
+      minimumFractionDigits: min,
+      maximumFractionDigits: max,
+    });
+    return symbol ? `${symbol}${numFormatted}` : numFormatted;
+  } catch {
+    const safeDecimals = typeof max === 'number' ? max : 2;
+    return symbol ? `${symbol}${Number(value).toFixed(safeDecimals)}` : Number(value).toFixed(safeDecimals);
+  }
 }
 
 /**
