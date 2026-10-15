@@ -37,11 +37,6 @@ const pageVariants = {
 };
 
 const CHART_COLORS = ['#4F46E5', '#10B981', '#F59E0B', '#0284C7', '#8B5CF6', '#EC4899'];
-const MOCK_CLUSTERS = [
-  { Segment: 'Low Value', Avg_Recency: 153, Avg_Frequency: 1.2, Avg_Monetary: 24150, Customer_Count: 2150 },
-  { Segment: 'Mid Value', Avg_Recency: 45, Avg_Frequency: 5.4, Avg_Monetary: 152250, Customer_Count: 1540 },
-  { Segment: 'High Value', Avg_Recency: 12, Avg_Frequency: 24.5, Avg_Monetary: 882000, Customer_Count: 648 },
-];
 
 function downloadCSV(data, filename) {
   if (!data || !data.length) return;
@@ -352,7 +347,7 @@ export default function Dashboard() {
       const [salesRes, predRes, clusterRes, basketRes, topRes, countryRes, datasetRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/analytics/sales`).catch(() => ({ data: {} })),
         axios.get(`${API_BASE_URL}/api/analytics/predictions`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE_URL}/api/analytics/clusters`).catch(() => ({ data: MOCK_CLUSTERS })),
+        axios.get(`${API_BASE_URL}/api/analytics/clusters`).catch(() => ({ data: [] })),
         axios.get(`${API_BASE_URL}/api/analytics/market-basket`).catch(() => ({ data: [] })),
         axios.get(`${API_BASE_URL}/api/analytics/top-products`).catch(() => ({ data: [] })),
         axios.get(`${API_BASE_URL}/api/analytics/sales-by-country`).catch(() => ({ data: [] })),
@@ -361,7 +356,7 @@ export default function Dashboard() {
 
       setSalesData(salesRes.data || { total_sales: 0, total_orders: 0, average_order_value: 0 });
       setPredictions(predRes.data?.length ? predRes.data : []);
-      setClusters(clusterRes.data?.length ? clusterRes.data : MOCK_CLUSTERS);
+      setClusters(clusterRes.data?.length ? clusterRes.data : []);
       setMarketBasket(basketRes.data || []);
       setTopProducts(topRes.data || []);
       setSalesByCountry(countryRes.data || []);
@@ -369,10 +364,8 @@ export default function Dashboard() {
       const files = datasetRes.data?.files || [];
       if (files.length > 0) {
         setActiveDataset(files[files.length - 1].name);
-        setClusters(clusterRes.data?.length ? clusterRes.data : []);
       } else {
         setActiveDataset(null);
-        setClusters([]);
       }
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
@@ -391,11 +384,19 @@ export default function Dashboard() {
     setLoadingInsight(true);
     try {
       const res = await axios.get(`${API_BASE_URL}/api/analytics/explain-trends`);
-      setAiInsight(res.data.response || res.data.error || 'Failed to analyze data.');
-    } catch {
-      setAiInsight('Groq API Error: Ensure the backend service is active and GROQ_API_KEY is configured in your .env file.');
+      if (res.data.response) {
+        setAiInsight(res.data.response);
+      } else if (res.data.error) {
+        setAiInsight(`Analysis Error: ${res.data.error}`);
+      } else {
+        setAiInsight('No analysis response received.');
+      }
+    } catch (err) {
+      const msg = err.response?.data?.detail || err.response?.data?.error || err.message;
+      setAiInsight(`Groq API Error: ${msg}. Check GROQ_API_KEY in .env.`);
+    } finally {
+      setLoadingInsight(false);
     }
-    setLoadingInsight(false);
   };
 
   const handleExportAll = () => {
