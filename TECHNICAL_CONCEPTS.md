@@ -592,12 +592,15 @@ Think of it like a **restaurant menu**:
 | `POST` | `/api/dataset/upload` | Upload a new dataset file |
 | `GET` | `/api/dataset/info` | Get info about current dataset |
 | `POST` | `/api/olap/query` | Run OLAP query (rollup/slice/dice/drilldown) |
+| `GET` | `/api/auth/login` | Verify administrator credentials |
 
-### Why Flask?
-Flask is a lightweight Python web framework. It's perfect for projects like this because:
-- It's simple to set up (10 lines to run a server)
-- Works naturally with Pandas and scikit-learn (Python ecosystem)
-- Supports threading (needed for the background ETL job)
+Write operations and Groq-powered endpoints require HTTP Basic authentication using server-configured administrator credentials.
+
+### Why FastAPI?
+FastAPI is a modern Python API framework well suited to this project because:
+- It validates request bodies with Pydantic models
+- It works naturally with Pandas and scikit-learn
+- Its background-task support keeps ETL work separate from the request response
 
 ---
 
@@ -666,15 +669,15 @@ Here is the full journey of data through the system:
 │  OLTP Database │    │  OLAP Data Warehouse            │
 │  (PostgreSQL)  │    │  (Snowflake Schema)             │
 │                │    │                                 │
-│  ecom_users    │    │  dim_customer                   │
-│  ecom_products │    │  dim_product + dim_category     │
-│  ecom_orders   │    │  dim_time                       │
-│  ecom_items    │    │  fact_sales                     │
+│  ecom_users    │    │  ecom_dim_customer              │
+│  ecom_products │    │  ecom_dim_product + category    │
+│  ecom_orders   │    │  ecom_dim_time                  │
+│  ecom_order_items │ │  ecom_sales_fact                │
 └────────┬───────┘    └───────────────┬─────────────────┘
          │                            │
          ▼                            ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                      FLASK REST API (backend/app.py)                │
+│                     FASTAPI REST API (backend/app.py)               │
 │                                                                     │
 │  ML Engine:                   Analytics Engine:                     │
 │  - K-Means Clustering         - OLAP Roll-up / Drill-down           │
@@ -799,11 +802,11 @@ Real-world problems were identified and solved during development:
 
 | Problem | Root Cause | Solution Applied |
 |---|---|---|
-| ETL job killed mid-run | Flask watchdog reloaded server on new library imports | `use_reloader=False` + pre-import all heavy libraries at startup |
+| ETL job state became inconsistent | Multiple workers had separate in-memory caches and job stores | Run one Uvicorn worker until job/cache state is moved to shared storage |
 | Superstore IDs crashed DB | Alphanumeric IDs like `CG-12520` failed `int()` cast | All ID columns stored as strings universally |
 | 404 polling loop | Server restart wiped in-memory job state | Frontend stops polling on 404 and shows clear user error |
 | Old data on dashboard | Browser sessionStorage cached stale analytics | Removed client-side caching for all analytics endpoints |
-| AI model error | Groq decommissioned `llama3-8b-8192` | Migrated to currently supported `llama-3.1-8b-instant` |
+| AI model error | An older Groq model was decommissioned | Migrated to `openai/gpt-oss-20b` |
 
 These are real engineering challenges — not just theory. Solving them demonstrates practical DBMS and software engineering knowledge beyond the syllabus.
 

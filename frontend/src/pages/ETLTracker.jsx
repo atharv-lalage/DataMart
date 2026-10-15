@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+// JSX member expressions from Framer Motion are not recognized by the ESLint parser.
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
 import { Activity, UploadCloud, DatabaseZap, Box, FileSpreadsheet, Play, RefreshCw, CheckCircle, AlertCircle, FolderOpen, ArrowRight } from 'lucide-react';
 import axios from 'axios';

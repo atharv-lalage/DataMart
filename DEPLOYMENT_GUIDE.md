@@ -4,7 +4,7 @@ Deploy your ADBMS project **100% free** using:
 
 | Service | What it hosts | Free tier |
 |---|---|---|
-| **Render.com** | Flask Backend (Python API) | 750 hours/month |
+| **Render.com** | FastAPI Backend (Python API) | 750 hours/month |
 | **Vercel** | React Frontend (Vite SPA) | Unlimited for hobby |
 | **NeonDB** | PostgreSQL Database | Already set up ✅ |
 
@@ -17,7 +17,7 @@ Before deploying, make sure your project has these files (already created):
 | File | Purpose |
 |---|---|
 | `render.yaml` | Render.com blueprint for auto-config |
-| `Procfile` | Tells Render how to start Flask with gunicorn |
+| `Procfile` | Tells Render how to start FastAPI with Uvicorn |
 | `runtime.txt` | Specifies Python 3.11.9 |
 | `backend/requirements.txt` | All Python dependencies (including `groq`) |
 | `frontend/vercel.json` | Vercel SPA routing config |
@@ -58,7 +58,7 @@ git push origin main
 | **Branch** | `main` |
 | **Runtime** | `Python` |
 | **Build Command** | `cd backend && pip install -r requirements.txt` |
-| **Start Command** | `cd backend && gunicorn app:app --bind 0.0.0.0:$PORT --timeout 120 --workers 2` |
+| **Start Command** | `cd backend && uvicorn app:app --host 0.0.0.0 --port $PORT` |
 | **Plan** | **Free** |
 
 ### 2.3 Set Environment Variables
@@ -68,6 +68,9 @@ In the Render dashboard, go to **Environment** tab and add:
 |---|---|
 | `DATABASE_URL` | `postgresql://user:password@your-neondb-host.neon.tech/neondb?sslmode=require` |
 | `GROQ_API_KEY` | `gsk_your_groq_api_key_here` |
+| `ADMIN_USERNAME` | A unique administrator username |
+| `ADMIN_PASSWORD` | A long, unique administrator password |
+| `CORS_ORIGINS` | `https://your-project.vercel.app` (your actual Vercel URL) |
 | `PYTHON_VERSION` | `3.11.9` |
 
 > 🔒 These are set securely in Render's dashboard, not in your code.
@@ -133,7 +136,7 @@ Open in browser:
 https://your-project.vercel.app
 ```
 
-1. Login with `admin` / `admin`
+1. Login with the `ADMIN_USERNAME` / `ADMIN_PASSWORD` configured on Render
 2. Go to **Data Cleaner** page
 3. Upload a dataset (smaller ones like `Sample_-_Superstore.csv` work best on free tier)
 4. Click **Clean Data** and watch the ETL pipeline run
@@ -144,7 +147,7 @@ https://your-project.vercel.app
 ## 🔧 Troubleshooting
 
 ### "CORS Error" in browser console
-The backend already has `CORS(app)` configured to allow all origins. If you still see CORS errors, make sure your `VITE_API_URL` doesn't have a trailing slash:
+Set `CORS_ORIGINS` on Render to your exact Vercel origin. Also make sure `VITE_API_URL` doesn't have a trailing slash:
 - ✅ `https://datamart-backend.onrender.com`
 - ❌ `https://datamart-backend.onrender.com/`
 

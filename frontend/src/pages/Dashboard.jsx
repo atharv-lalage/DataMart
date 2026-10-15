@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import API_BASE_URL from '../config';
 import {
@@ -6,8 +6,11 @@ import {
   Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
   BarChart, Bar, PieChart, Pie, Cell
 } from 'recharts';
+// JSX member expressions from Framer Motion are not recognized by the ESLint parser.
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
-import { Download, Sparkles, MessageCircle, Send, X, Trophy, Globe } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Download, Sparkles, MessageCircle, Send, X, Trophy, Globe, ArrowRight } from 'lucide-react';
 
 const pageVariants = {
   initial: { opacity: 0, y: 20 },
@@ -26,42 +29,159 @@ const itemVariants = {
 };
 
 const COLORS = ['#6366f1', '#ec4899', '#10B981', '#f59e0b', '#38bdf8', '#a78bfa'];
+const MOCK_CLUSTERS = [
+  { Segment: 'Low Value', Avg_Recency: 153, Avg_Frequency: 1.2, Avg_Monetary: 24150, Customer_Count: 2150 },
+  { Segment: 'Mid Value', Avg_Recency: 45, Avg_Frequency: 5.4, Avg_Monetary: 152250, Customer_Count: 1540 },
+  { Segment: 'High Value', Avg_Recency: 12, Avg_Frequency: 24.5, Avg_Monetary: 882000, Customer_Count: 648 },
+];
 
-// ── Utility: download any array as CSV ───────────────────────────────────────
 function downloadCSV(data, filename) {
   if (!data || !data.length) return;
   const keys = Object.keys(data[0]);
-  const rows = [keys.join(','), ...data.map(r => keys.map(k => `"${r[k]}"`).join(','))];
-  const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+  const rows = [
+    keys.map(k => `"${String(k).replace(/"/g, '""')}"`).join(','),
+    ...data.map(r => keys.map(k => {
+      const val = r[k] ?? '';
+      return `"${String(val).replace(/"/g, '""')}"`;
+    }).join(','))
+  ];
+  const blob = new Blob([rows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = filename; a.click();
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
   window.URL.revokeObjectURL(url);
 }
 
-// ── AI Chat Widget ───────────────────────────────────────────────────────────
+// ── AI Chat Widget (RAG + Text-to-SQL) ───────────────────────────────────────
+const SUGGESTED = [
+  { label: 'Top 5 products?', q: 'What are the top 5 products by revenue?' },
+  { label: 'Nov 2011 sales?', q: 'What was total revenue in November 2011?' },
+  { label: 'What is OLAP?',   q: 'What is OLAP and how does it work?' },
+  { label: 'Best country?',   q: 'Which country has the highest total sales?' },
+];
+
+function IntentBadge({ intent, source }) {
+  if (!intent) return null;
+  const isSQL = intent === 'data';
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      fontSize: '0.65rem', fontFamily: 'monospace', fontWeight: 700,
+      padding: '2px 7px', borderRadius: 20,
+      background: isSQL ? 'rgba(16,185,129,0.12)' : 'rgba(139,92,246,0.15)',
+      color: isSQL ? '#10B981' : '#a78bfa',
+      border: `1px solid ${isSQL ? 'rgba(16,185,129,0.3)' : 'rgba(139,92,246,0.3)'}`,
+      marginBottom: 4,
+    }}>
+      {isSQL ? '⚡ SQL' : '📚 RAG'}
+    </span>
+  );
+}
+
+function SQLBlock({ sql }) {
+  const [show, setShow] = useState(false);
+  if (!sql) return null;
+  return (
+    <div style={{ marginTop: 6 }}>
+      <button onClick={() => setShow(s => !s)} style={{
+        fontSize: '0.68rem', color: '#64748b', background: 'none',
+        border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline'
+      }}>
+        {show ? 'Hide SQL ▲' : 'Show SQL ▼'}
+      </button>
+      {show && (
+        <pre style={{
+          marginTop: 4, padding: '0.5rem 0.6rem',
+          background: '#0d1117', borderRadius: 6,
+          fontSize: '0.68rem', color: '#38bdf8', fontFamily: 'monospace',
+          overflowX: 'auto', whiteSpace: 'pre-wrap',
+          border: '1px solid rgba(56,189,248,0.15)', maxHeight: 140
+        }}>{sql}</pre>
+      )}
+    </div>
+  );
+}
+
+function RowsTable({ rows, columns }) {
+  if (!rows || rows.length === 0) return null;
+  const cols = columns.length ? columns : Object.keys(rows[0]);
+  return (
+    <div style={{ overflowX: 'auto', marginTop: 6 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.68rem' }}>
+        <thead>
+          <tr>
+            {cols.map(c => (
+              <th key={c} style={{ padding: '3px 6px', borderBottom: '1px solid rgba(255,255,255,0.1)',
+                color: '#64748b', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                {c}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.slice(0, 6).map((row, i) => (
+            <tr key={i}>
+              {cols.map(c => (
+                <td key={c} style={{ padding: '3px 6px', borderBottom: i < rows.length - 1
+                  ? '1px solid rgba(255,255,255,0.04)' : 'none', color: 'var(--text-main)' }}>
+                  {row[c] != null ? String(row[c]) : '—'}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {rows.length > 6 && (
+        <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: 3 }}>
+          …and {rows.length - 6} more rows
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AIChatWidget() {
-  const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState([
-    { role: 'ai', text: "Hi! I'm your AI Business Analyst. Ask me anything about your store's data!" }
-  ]);
-  const [input, setInput] = useState('');
+  const [open, setOpen]       = useState(false);
+  const [messages, setMessages] = useState([{
+    role: 'ai',
+    text: "Hi! I'm your AI analyst powered by RAG + Text-to-SQL.\n\nAsk me a data question (\"top 5 products by revenue?\") and I'll query the database. Ask a concept question (\"what is OLAP?\") and I'll search the knowledge base.",
+    intent: null, sql: null, rows: [], columns: []
+  }]);
+  const [input, setInput]     = useState('');
   const [thinking, setThinking] = useState(false);
-  const bottomRef = useRef(null);
+  const bottomRef             = useRef(null);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  const send = async () => {
-    const msg = input.trim();
+  const send = async (overrideMsg) => {
+    const msg = (overrideMsg || input).trim();
     if (!msg || thinking) return;
     setInput('');
-    setMessages(prev => [...prev, { role: 'user', text: msg }]);
+    const userMsg = { role: 'user', text: msg, intent: null, sql: null, rows: [], columns: [] };
+    setMessages(prev => [...prev, userMsg]);
     setThinking(true);
+
+    // Build history array for the API (last 8 messages)
+    const history = messages.slice(-8).map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', text: m.text }));
+
     try {
-      const res = await axios.post(`${API_BASE_URL}/api/analytics/ai-chat`, { message: msg });
-      setMessages(prev => [...prev, { role: 'ai', text: res.data.response || res.data.error }]);
-    } catch {
-      setMessages(prev => [...prev, { role: 'ai', text: 'Sorry, I could not reach the AI. Check your GROQ_API_KEY.' }]);
+      const res = await axios.post(`${API_BASE_URL}/api/chat`, { message: msg, history });
+      const d   = res.data;
+      setMessages(prev => [...prev, {
+        role: 'ai',
+        text: d.answer || d.response || 'No answer.',
+        intent: d.intent,
+        sql: d.sql,
+        rows: d.rows || [],
+        columns: d.columns || [],
+      }]);
+    } catch (err) {
+      const detail = err.response?.data?.detail || 'Could not reach the AI.';
+      setMessages(prev => [...prev, { role: 'ai', text: `⚠️ ${detail}`, intent: null, sql: null, rows: [], columns: [] }]);
     }
     setThinking(false);
   };
@@ -70,8 +190,7 @@ function AIChatWidget() {
     <>
       {/* Floating button */}
       <motion.button
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.95 }}
+        whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}
         onClick={() => setOpen(o => !o)}
         style={{
           position: 'fixed', bottom: '2rem', right: '2rem', zIndex: 1000,
@@ -94,62 +213,81 @@ function AIChatWidget() {
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             style={{
               position: 'fixed', bottom: '6rem', right: '2rem', zIndex: 999,
-              width: 360, background: 'rgba(13,15,23,0.97)',
+              width: 400, background: 'rgba(13,15,23,0.97)',
               border: '1px solid rgba(99,102,241,0.3)', borderRadius: 16,
               overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
-              display: 'flex', flexDirection: 'column'
+              display: 'flex', flexDirection: 'column', maxHeight: '80vh'
             }}
           >
             {/* Header */}
-            <div style={{ padding: '1rem 1.25rem', background: 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(236,72,153,0.1))', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div style={{ padding: '0.9rem 1.25rem', background: 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(236,72,153,0.1))', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
               <Sparkles size={16} color="#ec4899" />
-              <span style={{ fontWeight: 600, color: '#a5b4fc' }}>AI Business Analyst</span>
-              <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: '#4b5563', background: 'rgba(16,185,129,0.15)', color: '#10B981', padding: '2px 8px', borderRadius: 20 }}>Online</span>
+              <div>
+                <span style={{ fontWeight: 700, color: '#a5b4fc', fontSize: '0.9rem' }}>DataMart AI Analyst</span>
+                <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: 1 }}>RAG + Text-to-SQL · Groq LLaMA-3</div>
+              </div>
+              <span style={{ marginLeft: 'auto', fontSize: '0.7rem', background: 'rgba(16,185,129,0.15)', color: '#10B981', padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>● Live</span>
             </div>
 
             {/* Messages */}
-            <div style={{ padding: '1rem', overflowY: 'auto', maxHeight: 300, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div style={{ padding: '1rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {messages.map((m, i) => (
                 <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                  style={{
-                    alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                    maxWidth: '85%',
-                    padding: '0.6rem 0.9rem',
+                  style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '90%' }}
+                >
+                  {m.role === 'ai' && m.intent && <IntentBadge intent={m.intent} source={m.source} />}
+                  <div style={{
+                    padding: '0.65rem 0.9rem',
                     borderRadius: m.role === 'user' ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
                     background: m.role === 'user' ? 'linear-gradient(135deg,#6366f1,#ec4899)' : 'rgba(255,255,255,0.05)',
-                    fontSize: '0.88rem', lineHeight: 1.5,
-                    color: 'var(--text-main)',
-                    border: m.role === 'ai' ? '1px solid rgba(255,255,255,0.06)' : 'none'
-                  }}
-                >{m.text}</motion.div>
+                    fontSize: '0.87rem', lineHeight: 1.55, color: 'var(--text-main)',
+                    border: m.role === 'ai' ? '1px solid rgba(255,255,255,0.07)' : 'none',
+                    whiteSpace: 'pre-wrap'
+                  }}>
+                    {m.text}
+                  </div>
+                  {m.role === 'ai' && <SQLBlock sql={m.sql} />}
+                  {m.role === 'ai' && <RowsTable rows={m.rows} columns={m.columns} />}
+                </motion.div>
               ))}
               {thinking && (
-                <div style={{ alignSelf: 'flex-start', color: '#6366f1', fontSize: '0.85rem' }}>Thinking...</div>
+                <div style={{ alignSelf: 'flex-start', display: 'flex', gap: 6, alignItems: 'center' }}>
+                  {[0,1,2].map(d => (
+                    <motion.span key={d} animate={{ opacity: [0.3,1,0.3] }}
+                      transition={{ duration: 1.2, repeat: Infinity, delay: d * 0.2 }}
+                      style={{ width: 7, height: 7, borderRadius: '50%', background: '#6366f1', display: 'inline-block' }}
+                    />
+                  ))}
+                </div>
               )}
               <div ref={bottomRef} />
             </div>
 
             {/* Suggested questions */}
-            <div style={{ padding: '0 1rem 0.5rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-              {["Best product?", "Worst week in sales?", "Who are my top customers?"].map(q => (
-                <button key={q} onClick={() => { setInput(q); }}
-                  style={{ fontSize: '0.72rem', padding: '3px 10px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 20, color: '#a5b4fc', cursor: 'pointer' }}>
-                  {q}
+            <div style={{ padding: '0 1rem 0.6rem', display: 'flex', gap: '0.35rem', flexWrap: 'wrap', flexShrink: 0 }}>
+              {SUGGESTED.map(s => (
+                <button key={s.q} onClick={() => send(s.q)}
+                  style={{ fontSize: '0.7rem', padding: '3px 9px', background: 'rgba(99,102,241,0.08)',
+                    border: '1px solid rgba(99,102,241,0.25)', borderRadius: 20, color: '#94a3b8', cursor: 'pointer' }}>
+                  {s.label}
                 </button>
               ))}
             </div>
 
             {/* Input */}
-            <div style={{ padding: '0.75rem 1rem', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: '0.5rem' }}>
+            <div style={{ padding: '0.75rem 1rem', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
               <input
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && send()}
-                placeholder="Ask about your business..."
-                style={{ flex: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '0.5rem 0.75rem', color: 'white', fontSize: '0.88rem', outline: 'none' }}
+                placeholder="Ask about data or concepts..."
+                style={{ flex: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: 8, padding: '0.5rem 0.75rem', color: 'white', fontSize: '0.88rem', outline: 'none' }}
               />
-              <button onClick={send} disabled={thinking || !input.trim()}
-                style={{ background: 'linear-gradient(135deg,#6366f1,#ec4899)', border: 'none', borderRadius: 8, padding: '0.5rem 0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+              <button onClick={() => send()} disabled={thinking || !input.trim()}
+                style={{ background: thinking ? 'rgba(99,102,241,0.4)' : 'linear-gradient(135deg,#6366f1,#ec4899)',
+                  border: 'none', borderRadius: 8, padding: '0.5rem 0.75rem', cursor: thinking ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', transition: 'background 0.2s' }}>
                 <Send size={15} color="white" />
               </button>
             </div>
@@ -159,6 +297,7 @@ function AIChatWidget() {
     </>
   );
 }
+
 
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 export default function Dashboard() {
@@ -173,19 +312,13 @@ export default function Dashboard() {
   const [loadingInsight, setLoadingInsight] = useState(false);
   const [activeDataset, setActiveDataset] = useState(null);
 
-  const mockClusters = [
-    { Segment: 'Low Value', Avg_Recency: 153, Avg_Frequency: 1.2, Avg_Monetary: 24150, Customer_Count: 2150 },
-    { Segment: 'Mid Value', Avg_Recency: 45, Avg_Frequency: 5.4, Avg_Monetary: 152250, Customer_Count: 1540 },
-    { Segment: 'High Value', Avg_Recency: 12, Avg_Frequency: 24.5, Avg_Monetary: 882000, Customer_Count: 648 },
-  ];
-
-  const fetchAll = async () => {
+  const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
       const [salesRes, predRes, clusterRes, basketRes, topRes, countryRes, datasetRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/analytics/sales`).catch(() => ({ data: {} })),
         axios.get(`${API_BASE_URL}/api/analytics/predictions`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE_URL}/api/analytics/clusters`).catch(() => ({ data: mockClusters })),
+        axios.get(`${API_BASE_URL}/api/analytics/clusters`).catch(() => ({ data: MOCK_CLUSTERS })),
         axios.get(`${API_BASE_URL}/api/analytics/market-basket`).catch(() => ({ data: [] })),
         axios.get(`${API_BASE_URL}/api/analytics/top-products`).catch(() => ({ data: [] })),
         axios.get(`${API_BASE_URL}/api/analytics/sales-by-country`).catch(() => ({ data: [] })),
@@ -193,22 +326,30 @@ export default function Dashboard() {
       ]);
       setSalesData(salesRes.data);
       setPredictions(predRes.data.length ? predRes.data : []);
-      setClusters(clusterRes.data.length ? clusterRes.data : mockClusters);
+      setClusters(clusterRes.data.length ? clusterRes.data : MOCK_CLUSTERS);
       setMarketBasket(basketRes.data);
       setTopProducts(topRes.data);
       setSalesByCountry(countryRes.data);
-      // Pick the most recently modified file name as the active dataset
       const files = datasetRes.data?.files || [];
-      if (files.length > 0) setActiveDataset(files[files.length - 1].name);
+      if (files.length > 0) {
+        setActiveDataset(files[files.length - 1].name);
+        setClusters(clusterRes.data.length ? clusterRes.data : []);
+      } else {
+        setActiveDataset(null);
+        setClusters([]);
+      }
     } catch (err) {
       console.error(err);
-      setClusters(mockClusters);
+      setClusters([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void fetchAll(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchAll]);
 
   const generateInsights = async () => {
     setLoadingInsight(true);
@@ -226,12 +367,12 @@ export default function Dashboard() {
       <motion.div className="container" initial="initial" animate="in" exit="out" variants={pageVariants}>
 
         {/* Header */}
-        <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1.25rem' }}>
           <div>
             <h1>Business Dashboard</h1>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem' }}>
               <p style={{ margin: 0 }}>Overview of your sales and customer insights.</p>
-              {activeDataset && (
+              {activeDataset ? (
                 <motion.span
                   initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
                   style={{
@@ -245,6 +386,21 @@ export default function Dashboard() {
                 >
                   <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981', display: 'inline-block' }} />
                   {activeDataset}
+                </motion.span>
+              ) : (
+                <motion.span
+                  initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                    background: 'rgba(239,68,68,0.12)',
+                    border: '1px solid rgba(239,68,68,0.3)',
+                    color: '#fca5a5',
+                    padding: '3px 10px', borderRadius: '20px',
+                    fontSize: '0.78rem', fontWeight: 600, fontFamily: 'monospace'
+                  }}
+                >
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
+                  No Dataset Uploaded
                 </motion.span>
               )}
             </div>
@@ -260,6 +416,50 @@ export default function Dashboard() {
             <Download size={16} /> Export All
           </button>
         </div>
+
+        {/* Empty state alert if no dataset uploaded */}
+        {!activeDataset && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            style={{
+              padding: '1.25rem 1.5rem',
+              marginBottom: '1.5rem',
+              borderRadius: 14,
+              background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(236, 72, 153, 0.08))',
+              border: '1px solid rgba(99, 102, 241, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '1.5rem',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.2)'
+            }}
+          >
+            <div>
+              <h4 style={{ margin: '0 0 0.3rem 0', color: '#fff', fontSize: '1rem', fontWeight: 600 }}>
+                No Dataset Found for Your Account
+              </h4>
+              <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                Your data is strictly isolated to your account. To view analytics, predictions, and customer segmentation, please upload your sales data file (.xlsx, .csv).
+              </p>
+            </div>
+            <Link
+              to="/etl"
+              className="btn btn-primary"
+              style={{
+                flexShrink: 0,
+                textDecoration: 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '0.6rem 1.1rem',
+                fontSize: '0.88rem'
+              }}
+            >
+              Upload Dataset <ArrowRight size={15} />
+            </Link>
+          </motion.div>
+        )}
 
         {/* AI Insights Panel */}
         <motion.div className="glass-panel" style={{ padding: '1.5rem', marginBottom: '1.5rem', background: 'linear-gradient(135deg, rgba(99,102,241,0.1), rgba(236,72,153,0.05))', border: '1px solid rgba(99,102,241,0.3)' }}>
@@ -436,8 +636,29 @@ export default function Dashboard() {
             <motion.div variants={itemVariants} className="glass-panel" style={{ padding: '1.5rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <h2 style={{ margin: 0 }}>Products Usually Bought Together</h2>
-                <button onClick={() => downloadCSV(marketBasket, 'market_basket_rules.csv')}
-                  className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}>
+                <button
+                  onClick={() => {
+                    const exportData = marketBasket.map(r => ({
+                      'Items': r.rule,
+                      'Confidence': `${(r.confidence * 100).toFixed(1)}%`,
+                      'Support': `${(r.support * 100).toFixed(2)}%`,
+                      'Strength (Lift)': r.lift?.toFixed(2)
+                    }));
+                    downloadCSV(exportData, 'products_usually_bought_together.csv');
+                  }}
+                  disabled={!marketBasket.length}
+                  className="btn btn-outline"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    fontSize: '0.8rem',
+                    padding: '0.35rem 0.75rem',
+                    opacity: marketBasket.length ? 1 : 0.5,
+                    cursor: marketBasket.length ? 'pointer' : 'not-allowed'
+                  }}
+                  title={marketBasket.length ? 'Export association rules to CSV' : 'No rules available to export'}
+                >
                   <Download size={13} /> Export CSV
                 </button>
               </div>

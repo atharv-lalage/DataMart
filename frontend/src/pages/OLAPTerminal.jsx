@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+// JSX member expressions from Framer Motion are not recognized by the ESLint parser.
+// eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
 import { Terminal, Play, Database, Table, AlertTriangle, Wifi, Filter } from 'lucide-react';
 import axios from 'axios';
@@ -281,7 +283,7 @@ export default function OLAPTerminal() {
                   style={{ justifyContent: 'flex-start', padding: '0.65rem 1rem', fontSize: '0.9rem' }}
                   onClick={() => { setActiveQuery(key); setExecutedData(null); setError(null); }}
                 >
-                  <Terminal size={15} /> {query.title}
+                  <Terminal size={15} /> {query.title} <span style={{ opacity: 0.55, fontWeight: 400, fontSize: '0.78rem' }}>({key === 'rollup' ? 'Roll-up' : key === 'drilldown' ? 'Drill-down' : key === 'slice' ? 'Slice' : 'Dice'})</span>
                 </button>
               ))}
             </div>

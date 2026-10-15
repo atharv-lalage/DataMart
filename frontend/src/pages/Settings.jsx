@@ -1,6 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+// JSX member expressions from Framer Motion are not recognized by the ESLint parser.
+// eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
 import { Shield, Database, Key, CheckCircle, Save, RefreshCw } from 'lucide-react';
+import axios from 'axios';
+import API_BASE_URL from '../config';
 
 const pageVariants = {
   initial: { opacity: 0, y: 20 },
@@ -12,7 +16,6 @@ const DEFAULTS = {
   minSupport: 0.03,
   projectionWindow: 3,
   kClusters: 3,
-  cacheStrategy: 'pickle',
 };
 
 export default function Settings() {
@@ -25,6 +28,7 @@ export default function Settings() {
     }
   });
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [cleared, setCleared] = useState(false);
 
   const handleChange = (key, value) => {
@@ -32,7 +36,33 @@ export default function Settings() {
     setSaved(false);
   };
 
-  const handleSave = () => {
+  useEffect(() => {
+    axios.get(`${API_BASE_URL}/api/settings/analytics`)
+      .then(({ data }) => setConfig({
+        minSupport: data.min_support,
+        projectionWindow: data.projection_window,
+        kClusters: data.k_clusters,
+      }))
+      .catch(() => {});
+  }, []);
+
+  const handleSave = async () => {
+    setSaveError('');
+    try {
+      const { data } = await axios.put(`${API_BASE_URL}/api/settings/analytics`, {
+        min_support: config.minSupport,
+        projection_window: config.projectionWindow,
+        k_clusters: config.kClusters,
+      });
+      setConfig({
+        minSupport: data.min_support,
+        projectionWindow: data.projection_window,
+        kClusters: data.k_clusters,
+      });
+    } catch (error) {
+      setSaveError(error.response?.data?.detail || 'Could not save settings. Ensure the backend is running.');
+      return;
+    }
     sessionStorage.setItem('mlConfig', JSON.stringify(config));
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
@@ -74,7 +104,7 @@ export default function Settings() {
             </div>
             <div>
               <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Credentials</label>
-              <div style={{ fontWeight: 500, fontFamily: 'monospace', color: 'var(--accent-primary)' }}>admin / admin</div>
+              <div style={{ fontWeight: 500, color: 'var(--accent-primary)' }}>Configured securely on the server</div>
             </div>
           </div>
 
@@ -106,21 +136,14 @@ export default function Settings() {
                 <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>Connection String</label>
                 <input
                   type="text"
-                  value="postgresql://neondb_owner:***@ep-still-violet.aws.neon.tech"
+                  value="Configured through DATABASE_URL"
                   readOnly
                   style={{ width: '100%', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)', padding: '0.5rem', borderRadius: '4px', boxSizing: 'border-box' }}
                 />
               </div>
               <div>
                 <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>Cache Strategy</label>
-                <select
-                  value={config.cacheStrategy}
-                  onChange={(e) => handleChange('cacheStrategy', e.target.value)}
-                  style={{ width: '100%', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white', padding: '0.5rem', borderRadius: '4px' }}
-                >
-                  <option value="pickle">SessionStorage + Pickle (Aggressive)</option>
-                  <option value="none">No Cache (Always Fresh)</option>
-                </select>
+                <div style={{ color: 'var(--text-muted)', padding: '0.5rem 0', fontSize: '0.9rem' }}>Server-managed pickle cache</div>
               </div>
             </div>
           </div>
@@ -181,9 +204,10 @@ export default function Settings() {
                   animate={{ opacity: 1, x: 0 }}
                   style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#10B981', fontSize: '0.9rem' }}
                 >
-                  <CheckCircle size={16} /> Configuration saved to session.
+                  <CheckCircle size={16} /> Configuration saved to the backend.
                 </motion.span>
               )}
+              {saveError && <span style={{ color: '#ec4899', fontSize: '0.85rem' }}>{saveError}</span>}
               <button
                 className="btn btn-primary"
                 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}

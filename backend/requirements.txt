@@ -7,6 +7,17 @@ psycopg2-binary
 SQLAlchemy
 mlxtend
 openpyxl
+xlrd
 python-dotenv
 groq
 numpy
+statsmodels
+langchain
+langchain-community
+langchain-groq
+faiss-cpu
+sentence-transformers
+pymongo
+dnspython
+bcrypt
+pyjwt

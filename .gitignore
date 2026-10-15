@@ -1,5 +1,6 @@
 # Environment variables
 .env
+.env.local
 
 # Personal notes (viva prep / interview notes)
 THEORY.md
@@ -46,6 +47,7 @@ yarn-error.log*
 # Database/Cache backups
 *.sqlite3
 cached_data.pkl
+analytics_config.json
 
 # IDE / System
 .vscode/

@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import API_BASE_URL from '../config';
 import { ShoppingCart, Search, TrendingUp, CheckCircle, AlertCircle, Package } from 'lucide-react';
+// JSX member expressions from Framer Motion are not recognized by the ESLint parser.
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
 
 const pageVariants = {

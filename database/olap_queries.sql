@@ -5,9 +5,9 @@ SELECT
     dt.year, 
     SUM(sf.amount) as total_sales
 FROM 
-    sales_fact sf
+    ecom_sales_fact sf
 JOIN 
-    dim_time dt ON sf.date_id = dt.date_id
+    ecom_dim_time dt ON sf.date_id = dt.date_id
 GROUP BY 
     dt.year
 ORDER BY 
@@ -20,9 +20,9 @@ SELECT
     dt.day, 
     SUM(sf.amount) as total_sales
 FROM 
-    sales_fact sf
+    ecom_sales_fact sf
 JOIN 
-    dim_time dt ON sf.date_id = dt.date_id
+    ecom_dim_time dt ON sf.date_id = dt.date_id
 GROUP BY 
     dt.year, dt.month, dt.day
 ORDER BY 
@@ -33,11 +33,11 @@ SELECT
     dp.name, 
     SUM(sf.amount) as category_sales
 FROM 
-    sales_fact sf
+    ecom_sales_fact sf
 JOIN 
-    dim_product dp ON sf.product_id = dp.product_id
+    ecom_dim_product dp ON sf.product_id = dp.product_id
 JOIN 
-    dim_category dc ON dp.category_id = dc.category_id
+    ecom_dim_category dc ON dp.category_id = dc.category_id
 WHERE 
     dc.category_name = 'Gift' -- Example category
 GROUP BY 
@@ -49,13 +49,13 @@ SELECT
     dt.year, 
     SUM(sf.amount) as total_sales
 FROM 
-    sales_fact sf
+    ecom_sales_fact sf
 JOIN 
-    dim_product dp ON sf.product_id = dp.product_id
+    ecom_dim_product dp ON sf.product_id = dp.product_id
 JOIN 
-    dim_category dc ON dp.category_id = dc.category_id
+    ecom_dim_category dc ON dp.category_id = dc.category_id
 JOIN 
-    dim_time dt ON sf.date_id = dt.date_id
+    ecom_dim_time dt ON sf.date_id = dt.date_id
 WHERE 
     dc.category_name IN ('Gift', 'Decoration') -- Example categories
     AND dt.year IN (2010, 2011)               -- Example years

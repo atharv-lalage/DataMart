@@ -1,5 +1,5 @@
 import pandas as pd
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 import numpy as np
 import os
 import json
@@ -13,14 +13,9 @@ def insert_do_nothing(table, conn, keys, data_iter):
 
 # Load environment variables from .env file up one level
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env.local'), override=True)
 
-# Database connection credentials (adjust as needed)
 DATABASE_URL = os.environ.get('DATABASE_URL')
-DB_USER = 'postgres'
-DB_PASSWORD = 'password' # CHANGE ME
-DB_HOST = 'localhost'
-DB_PORT = '5432'
-DB_NAME = 'ecommerce_db'
 
 try:
     from groq import Groq
@@ -30,9 +25,32 @@ except Exception as e:
     print(f"Groq API not loaded: {e}")
 
 def get_engine():
-    if DATABASE_URL:
-        return create_engine(DATABASE_URL)
-    return create_engine(f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}')
+    """Return a database engine only when one was explicitly configured."""
+    return create_engine(DATABASE_URL, pool_pre_ping=True) if DATABASE_URL else None
+
+
+def initialize_database(engine):
+    """Create the OLTP and warehouse tables without deleting existing data."""
+    schema_path = os.path.join(os.path.dirname(__file__), '..', 'database', 'schema_init.sql')
+    with open(schema_path, encoding='utf-8') as schema_file:
+        schema = schema_file.read()
+    with engine.begin() as conn:
+        conn.execute(text(schema))
+
+
+def clear_loaded_data(engine):
+    """Clear imported operational and warehouse data before a full ETL refresh.
+
+    The pipeline is a full snapshot load, not an incremental load. Clearing first
+    prevents facts from being counted again each time the same dataset is loaded.
+    """
+    tables = [
+        'ecom_sales_fact', 'ecom_dim_time', 'ecom_dim_product',
+        'ecom_dim_customer', 'ecom_dim_category', 'ecom_order_items',
+        'ecom_orders', 'ecom_products', 'ecom_users',
+    ]
+    with engine.begin() as conn:
+        conn.execute(text(f"TRUNCATE TABLE {', '.join(tables)} RESTART IDENTITY CASCADE"))
 
 def normalize_columns(df, log_func=print):
     """

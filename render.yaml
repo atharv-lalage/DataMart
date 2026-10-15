@@ -10,11 +10,17 @@ services:
     buildCommand: |
       cd backend && pip install -r requirements.txt
     startCommand: |
-      cd backend && uvicorn app:app --host 0.0.0.0 --port $PORT --workers 2
+      cd backend && uvicorn app:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: DATABASE_URL
         sync: false  # You'll set this manually in Render dashboard
       - key: GROQ_API_KEY
+        sync: false
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: CORS_ORIGINS
         sync: false
       - key: PYTHON_VERSION
         value: 3.11.9
