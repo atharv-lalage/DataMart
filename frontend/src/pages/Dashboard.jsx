@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { Card, Button, Badge, Skeleton, EmptyState } from '../components/common';
 import MetricCard from '../components/dashboard/MetricCard';
+import { getDatasetCurrency, formatCurrency, formatCompactCurrency } from '../utils/formatters';
 
 const pageVariants = {
   initial: { opacity: 0, y: 12 },
@@ -64,17 +65,27 @@ function downloadCSV(data, filename) {
 }
 
 // ── Custom Clean White Recharts Tooltip ──────────────────────────────────────
-function CustomChartTooltip({ active, payload, label, formatter }) {
+function CustomChartTooltip({ active, payload, label, formatter, currencySymbol = '' }) {
   if (!active || !payload || !payload.length) return null;
   return (
     <div className="recharts-custom-tooltip">
       {label && <div className="recharts-custom-tooltip__label">{label}</div>}
       {payload.map((entry, index) => {
-        const valFormatted = formatter ? formatter(entry.value, entry.name, entry) : `₹${entry.value?.toLocaleString()}`;
+        const valFormatted = formatter
+          ? formatter(entry.value, entry.name, entry)
+          : formatCurrency(entry.value, currencySymbol);
+
+        let displayVal = valFormatted;
+        let displayName = entry.name;
+        if (Array.isArray(valFormatted)) {
+          displayVal = valFormatted[0];
+          displayName = valFormatted[1] || entry.name;
+        }
+
         return (
           <div key={`item-${index}`} className="recharts-custom-tooltip__item" style={{ color: entry.color || '#0F172A' }}>
-            <span style={{ fontWeight: 500, marginRight: 6 }}>{entry.name}:</span>
-            <span style={{ fontWeight: 700 }}>{valFormatted}</span>
+            <span style={{ fontWeight: 500, marginRight: 6 }}>{displayName}:</span>
+            <span style={{ fontWeight: 700 }}>{displayVal}</span>
           </div>
         );
       })}
@@ -395,6 +406,9 @@ export default function Dashboard() {
     setTimeout(() => downloadCSV(marketBasket, 'market_basket_rules.csv'), 800);
   };
 
+  const currencyInfo = getDatasetCurrency(activeDataset);
+  const currencySymbol = currencyInfo.symbol;
+
   return (
     <>
       <motion.div className="container" initial="initial" animate="in" exit="out" variants={pageVariants}>
@@ -408,6 +422,7 @@ export default function Dashboard() {
                 {activeDataset ? (
                   <Badge variant="success" withDot>
                     {activeDataset}
+                    {currencyInfo.code ? ` (${currencyInfo.code})` : ''}
                   </Badge>
                 ) : (
                   <Badge variant="warning" withDot>
@@ -529,8 +544,8 @@ export default function Dashboard() {
           <div className="dashboard-kpi-grid">
             <MetricCard
               label="Total Revenue"
-              value={`₹${(salesData.total_sales || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-              subtitle="All-time gross sales across active dataset"
+              value={formatCurrency(salesData.total_sales, currencySymbol, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              subtitle={currencyInfo.code ? `All-time gross sales (${currencyInfo.code})` : "All-time gross sales across active dataset"}
               icon={<TrendingUp size={18} />}
               iconBg="#EEF2FF"
               iconColor="#4F46E5"
@@ -545,8 +560,8 @@ export default function Dashboard() {
             />
             <MetricCard
               label="Average Order Value (AOV)"
-              value={`₹${(salesData.average_order_value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-              subtitle="Mean monetary revenue per order"
+              value={formatCurrency(salesData.average_order_value, currencySymbol, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              subtitle={currencyInfo.code ? `Mean monetary revenue per order (${currencyInfo.code})` : "Mean monetary revenue per order"}
               icon={<CreditCard size={18} />}
               iconBg="#EFF6FF"
               iconColor="#0284C7"
@@ -587,8 +602,8 @@ export default function Dashboard() {
                   <LineChart data={predictions} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
                     <XAxis dataKey="period" stroke="#64748B" tick={{ fontSize: 11, fill: '#64748B' }} />
-                    <YAxis stroke="#64748B" tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11, fill: '#64748B' }} />
-                    <RechartsTooltip content={<CustomChartTooltip />} />
+                    <YAxis stroke="#64748B" tickFormatter={v => formatCompactCurrency(v, currencySymbol)} tick={{ fontSize: 11, fill: '#64748B' }} />
+                    <RechartsTooltip content={<CustomChartTooltip currencySymbol={currencySymbol} />} />
                     <Legend
                       verticalAlign="top"
                       align="right"
@@ -696,7 +711,7 @@ export default function Dashboard() {
                         </Badge>
                       </div>
                       <div style={{ fontSize: '0.75rem', color: '#64748B', display: 'flex', justifyContent: 'space-between' }}>
-                        <span>Avg Spend: <strong>₹{c.Avg_Monetary?.toLocaleString(undefined, { maximumFractionDigits: 0 })}</strong></span>
+                        <span>Avg Spend: <strong>{formatCurrency(c.Avg_Monetary, currencySymbol, { maximumFractionDigits: 0 })}</strong></span>
                         <span>Freq: <strong>{c.Avg_Frequency}</strong></span>
                       </div>
                     </div>
@@ -741,7 +756,7 @@ export default function Dashboard() {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={topProducts} layout="vertical" margin={{ left: 10, right: 20, top: 10, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" horizontal={false} />
-                    <XAxis type="number" stroke="#64748B" tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11, fill: '#64748B' }} />
+                    <XAxis type="number" stroke="#64748B" tickFormatter={v => formatCompactCurrency(v, currencySymbol)} tick={{ fontSize: 11, fill: '#64748B' }} />
                     <YAxis
                       type="category"
                       dataKey="product"
@@ -751,7 +766,7 @@ export default function Dashboard() {
                       tickFormatter={v => v.length > 20 ? v.substring(0, 20) + '…' : v}
                     />
                     <RechartsTooltip
-                      content={<CustomChartTooltip formatter={(v, n, p) => [`₹${v?.toLocaleString()}`, p.payload.product]} />}
+                      content={<CustomChartTooltip formatter={(v, n, p) => [formatCurrency(v, currencySymbol), p.payload.product]} />}
                     />
                     <Bar dataKey="revenue" name="Revenue" radius={[0, 4, 4, 0]}>
                       {topProducts.map((_, i) => (
@@ -797,7 +812,7 @@ export default function Dashboard() {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={salesByCountry} layout="vertical" margin={{ left: 10, right: 20, top: 10, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" horizontal={false} />
-                    <XAxis type="number" stroke="#64748B" tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11, fill: '#64748B' }} />
+                    <XAxis type="number" stroke="#64748B" tickFormatter={v => formatCompactCurrency(v, currencySymbol)} tick={{ fontSize: 11, fill: '#64748B' }} />
                     <YAxis
                       type="category"
                       dataKey="country"
@@ -806,7 +821,7 @@ export default function Dashboard() {
                       tick={{ fontSize: 11, fill: '#475569' }}
                     />
                     <RechartsTooltip
-                      content={<CustomChartTooltip formatter={v => [`₹${v?.toLocaleString()}`, 'Revenue']} />}
+                      content={<CustomChartTooltip formatter={v => [formatCurrency(v, currencySymbol), 'Revenue']} />}
                     />
                     <Bar dataKey="revenue" name="Revenue" fill="#0284C7" radius={[0, 4, 4, 0]}>
                       {salesByCountry.map((_, i) => (
