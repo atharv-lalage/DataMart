@@ -1,15 +1,21 @@
-import React, { useEffect, useState } from 'react';
-// JSX member expressions from Framer Motion are not recognized by the ESLint parser.
+import React, { useEffect, useState, useMemo } from 'react';
 // eslint-disable-next-line no-unused-vars
-import { motion } from 'framer-motion';
-import { Shield, Database, Key, CheckCircle, Save, RefreshCw } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Database, ShieldCheck, CheckCircle, RefreshCw } from 'lucide-react';
 import axios from 'axios';
 import API_BASE_URL from '../config';
+import { PageHeader, Badge } from '../components/common/index.js';
+import SettingsNavigation from '../components/settings/SettingsNavigation.jsx';
+import ProfileSettings from '../components/settings/ProfileSettings.jsx';
+import DatabaseSettings from '../components/settings/DatabaseSettings.jsx';
+import MLSettings from '../components/settings/MLSettings.jsx';
+import AprioriSettings from '../components/settings/AprioriSettings.jsx';
+import CacheSettings from '../components/settings/CacheSettings.jsx';
 
 const pageVariants = {
-  initial: { opacity: 0, y: 20 },
+  initial: { opacity: 0, y: 10 },
   in: { opacity: 1, y: 0 },
-  out: { opacity: 0, y: -20 }
+  out: { opacity: 0, y: -10 }
 };
 
 const DEFAULTS = {
@@ -19,6 +25,20 @@ const DEFAULTS = {
 };
 
 export default function Settings() {
+  const [activeTab, setActiveTab] = useState('profile');
+
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('datamart_user')) || null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [activeDataset, setActiveDataset] = useState(() => {
+    return localStorage.getItem('datamart_active_dataset') || '';
+  });
+
   const [config, setConfig] = useState(() => {
     try {
       const saved = sessionStorage.getItem('mlConfig');
@@ -27,198 +47,208 @@ export default function Settings() {
       return DEFAULTS;
     }
   });
+
+  const [serverConfig, setServerConfig] = useState(DEFAULTS);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [cleared, setCleared] = useState(false);
+
+  // Compute if there are unsaved changes
+  const hasChanges = useMemo(() => {
+    return (
+      config.minSupport !== serverConfig.minSupport ||
+      config.projectionWindow !== serverConfig.projectionWindow ||
+      config.kClusters !== serverConfig.kClusters
+    );
+  }, [config, serverConfig]);
+
+  // Determine which tabs have unsaved changes
+  const unsavedTabs = useMemo(() => {
+    const tabs = [];
+    if (config.kClusters !== serverConfig.kClusters || config.projectionWindow !== serverConfig.projectionWindow) {
+      tabs.push('ml');
+    }
+    if (config.minSupport !== serverConfig.minSupport) {
+      tabs.push('apriori');
+    }
+    return tabs;
+  }, [config, serverConfig]);
 
   const handleChange = (key, value) => {
     setConfig(prev => ({ ...prev, [key]: value }));
     setSaved(false);
+    setSaveError('');
   };
 
+  // Sync dataset info
+  useEffect(() => {
+    axios.get(`${API_BASE_URL}/api/dataset/info`)
+      .then(res => {
+        const files = res.data?.files || [];
+        if (files.length > 0) {
+          const current = files[files.length - 1].name;
+          setActiveDataset(current);
+          localStorage.setItem('datamart_active_dataset', current);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Sync auth profile
+  useEffect(() => {
+    const token = localStorage.getItem('datamart_token');
+    if (token) {
+      if (!axios.defaults.headers.common.Authorization) {
+        axios.defaults.headers.common.Authorization = `Bearer ${token}`;
+      }
+      axios.get(`${API_BASE_URL}/api/auth/me`)
+        .then(res => {
+          setCurrentUser(res.data);
+          localStorage.setItem('datamart_user', JSON.stringify(res.data));
+        })
+        .catch(() => {});
+    }
+  }, []);
+
+  // Fetch initial analytics settings from backend
   useEffect(() => {
     axios.get(`${API_BASE_URL}/api/settings/analytics`)
-      .then(({ data }) => setConfig({
-        minSupport: data.min_support,
-        projectionWindow: data.projection_window,
-        kClusters: data.k_clusters,
-      }))
-      .catch(() => {});
+      .then(({ data }) => {
+        const backendConfig = {
+          minSupport: data.min_support,
+          projectionWindow: data.projection_window,
+          kClusters: data.k_clusters,
+        };
+        setConfig(backendConfig);
+        setServerConfig(backendConfig);
+        sessionStorage.setItem('mlConfig', JSON.stringify(backendConfig));
+      })
+      .catch((err) => {
+        console.warn('Could not fetch analytics settings from backend:', err);
+      });
   }, []);
 
   const handleSave = async () => {
     setSaveError('');
+    setSaving(true);
     try {
       const { data } = await axios.put(`${API_BASE_URL}/api/settings/analytics`, {
         min_support: config.minSupport,
         projection_window: config.projectionWindow,
         k_clusters: config.kClusters,
       });
-      setConfig({
+
+      const updated = {
         minSupport: data.min_support,
         projectionWindow: data.projection_window,
         kClusters: data.k_clusters,
-      });
+      };
+
+      setConfig(updated);
+      setServerConfig(updated);
+      sessionStorage.setItem('mlConfig', JSON.stringify(updated));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3500);
     } catch (error) {
       setSaveError(error.response?.data?.detail || 'Could not save settings. Ensure the backend is running.');
-      return;
+    } finally {
+      setSaving(false);
     }
-    sessionStorage.setItem('mlConfig', JSON.stringify(config));
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+  };
+
+  const handleReset = () => {
+    setConfig(DEFAULTS);
+    setSaved(false);
+    setSaveError('');
   };
 
   const handleClearCache = () => {
-    ['salesCache', 'predsCache', 'clustersCache', 'basketCache', 'productsCache', 'mlConfig'].forEach(k => sessionStorage.removeItem(k));
+    ['salesCache', 'predsCache', 'clustersCache', 'basketCache', 'productsCache', 'mlConfig'].forEach(k => {
+      sessionStorage.removeItem(k);
+    });
     setCleared(true);
     setTimeout(() => setCleared(false), 3000);
   };
 
   return (
-    <motion.div className="container" initial="initial" animate="in" exit="out" variants={pageVariants}>
-      <div className="page-header">
-        <h1>Administrator Settings</h1>
-        <p>Manage system preferences and ML pipeline configuration.</p>
-      </div>
-
-      <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr 2fr' }}>
-
-        {/* Profile panel */}
-        <div className="glass-panel" style={{ padding: '2rem' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', borderBottom: '1px solid var(--glass-border)', paddingBottom: '1.5rem', marginBottom: '1.5rem' }}>
-            <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))', marginBottom: '1rem', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-              <Shield size={32} color="white" />
-            </div>
-            <h3 style={{ margin: 0 }}>Administrator</h3>
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Super Admin Role</span>
+    <motion.div
+      className="container settings-workspace"
+      initial="initial"
+      animate="in"
+      exit="out"
+      variants={pageVariants}
+    >
+      <PageHeader
+        title="Settings"
+        subtitle="Manage your DataMart workspace, analytics configuration, and system preferences."
+        badge={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            {activeDataset && (
+              <Badge variant="neutral">
+                <Database size={13} />
+                <span>{activeDataset}</span>
+              </Badge>
+            )}
+            <Badge variant="primary">
+              <ShieldCheck size={13} />
+              <span>{currentUser?.role === 'admin' ? 'Super Admin' : 'Tenant Operator'}</span>
+            </Badge>
           </div>
+        }
+      />
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div>
-              <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Email</label>
-              <div style={{ fontWeight: 500 }}>admin@datamart.enterprise</div>
-            </div>
-            <div>
-              <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Security Clearance</label>
-              <div style={{ display: 'inline-block', background: 'rgba(16, 185, 129, 0.2)', color: '#10B981', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>Level 5 (Max)</div>
-            </div>
-            <div>
-              <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Credentials</label>
-              <div style={{ fontWeight: 500, color: 'var(--accent-primary)' }}>Configured securely on the server</div>
-            </div>
-          </div>
+      {/* Navigation Tabs Bar */}
+      <SettingsNavigation
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        unsavedTabs={unsavedTabs}
+      />
 
-          {/* Cache clear */}
-          <div style={{ marginTop: '2rem' }}>
-            <button
-              className="btn btn-outline"
-              style={{ width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '0.5rem', color: cleared ? '#10B981' : undefined }}
-              onClick={handleClearCache}
-            >
-              {cleared ? <CheckCircle size={16} /> : <RefreshCw size={16} />}
-              {cleared ? 'Cache Cleared!' : 'Clear Session Cache'}
-            </button>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.5rem', textAlign: 'center' }}>
-              Forces all dashboard data to reload from the API on next visit.
-            </p>
-          </div>
-        </div>
+      {/* Tab Panels */}
+      <div className="settings-tab-content">
+        {activeTab === 'profile' && (
+          <ProfileSettings
+            currentUser={currentUser}
+          />
+        )}
 
-        {/* Config panels */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        {activeTab === 'database' && (
+          <DatabaseSettings />
+        )}
 
-          <div className="glass-panel" style={{ padding: '2rem' }}>
-            <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}>
-              <Database size={20} color="var(--accent-primary)" /> Database Configuration
-            </h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-              <div>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>Connection String</label>
-                <input
-                  type="text"
-                  value="Configured through DATABASE_URL"
-                  readOnly
-                  style={{ width: '100%', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)', padding: '0.5rem', borderRadius: '4px', boxSizing: 'border-box' }}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>Cache Strategy</label>
-                <div style={{ color: 'var(--text-muted)', padding: '0.5rem 0', fontSize: '0.9rem' }}>Server-managed pickle cache</div>
-              </div>
-            </div>
-          </div>
+        {activeTab === 'ml' && (
+          <MLSettings
+            config={config}
+            onChange={handleChange}
+            onSave={handleSave}
+            onReset={handleReset}
+            saving={saving}
+            saved={saved}
+            saveError={saveError}
+            hasChanges={hasChanges}
+          />
+        )}
 
-          <div className="glass-panel" style={{ padding: '2rem' }}>
-            <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}>
-              <Key size={20} color="#ec4899" /> Machine Learning Pipeline
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        {activeTab === 'apriori' && (
+          <AprioriSettings
+            config={config}
+            onChange={handleChange}
+            onSave={handleSave}
+            onReset={handleReset}
+            saving={saving}
+            saved={saved}
+            saveError={saveError}
+            hasChanges={hasChanges}
+          />
+        )}
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--glass-border)', paddingBottom: '1.25rem' }}>
-                <div>
-                  <div style={{ fontWeight: 500 }}>Apriori Minimum Support</div>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Controls association rule generation strictness (0.01–0.2)</div>
-                </div>
-                <input
-                  type="number"
-                  value={config.minSupport}
-                  step="0.01" min="0.01" max="0.2"
-                  onChange={(e) => handleChange('minSupport', parseFloat(e.target.value))}
-                  style={{ width: '80px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white', padding: '0.5rem', borderRadius: '4px', textAlign: 'center' }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--glass-border)', paddingBottom: '1.25rem' }}>
-                <div>
-                  <div style={{ fontWeight: 500 }}>Linear Regression Projection Window</div>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Months ahead to predict sales (1–12)</div>
-                </div>
-                <input
-                  type="number"
-                  value={config.projectionWindow}
-                  min="1" max="12"
-                  onChange={(e) => handleChange('projectionWindow', parseInt(e.target.value))}
-                  style={{ width: '80px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white', padding: '0.5rem', borderRadius: '4px', textAlign: 'center' }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <div style={{ fontWeight: 500 }}>K-Means Cluster Count</div>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Number of customer segments (2–6)</div>
-                </div>
-                <input
-                  type="number"
-                  value={config.kClusters}
-                  min="2" max="6"
-                  onChange={(e) => handleChange('kClusters', parseInt(e.target.value))}
-                  style={{ width: '80px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white', padding: '0.5rem', borderRadius: '4px', textAlign: 'center' }}
-                />
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '1rem', marginTop: '2rem' }}>
-              {saved && (
-                <motion.span
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#10B981', fontSize: '0.9rem' }}
-                >
-                  <CheckCircle size={16} /> Configuration saved to the backend.
-                </motion.span>
-              )}
-              {saveError && <span style={{ color: '#ec4899', fontSize: '0.85rem' }}>{saveError}</span>}
-              <button
-                className="btn btn-primary"
-                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-                onClick={handleSave}
-              >
-                <Save size={16} /> Save Configurations
-              </button>
-            </div>
-          </div>
-
-        </div>
+        {activeTab === 'cache' && (
+          <CacheSettings
+            onClearCache={handleClearCache}
+            cleared={cleared}
+          />
+        )}
       </div>
     </motion.div>
   );
