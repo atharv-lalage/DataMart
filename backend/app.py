@@ -108,9 +108,9 @@ class LoginRequest(BaseModel):
     password: str
 
 
-def require_admin(authorization: Optional[str] = Header(None)):
+def require_authenticated_user(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
     """
-    Protects endpoints using either:
+    Protects endpoints by verifying identity using either:
       1. JWT Bearer token (from MongoDB users auth)
       2. Basic Auth (legacy admin credentials)
     """
@@ -142,6 +142,14 @@ def require_admin(authorization: Optional[str] = Header(None)):
         return {'username': username, 'role': 'admin'}
 
     raise HTTPException(status_code=401, detail='Unsupported authentication scheme', headers={'WWW-Authenticate': 'Bearer'})
+
+
+def require_admin(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
+    """Ensures the caller has administrator privileges; raises 403 Forbidden for non-admin users."""
+    user = require_authenticated_user(authorization)
+    if user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail='Administrator access required')
+    return user
 
 
 def get_authenticated_user(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
@@ -200,7 +208,7 @@ def api_login(req: LoginRequest):
 
 
 @app.get('/api/auth/me')
-def api_me(user: Dict[str, Any] = Depends(require_admin)):
+def api_me(user: Dict[str, Any] = Depends(require_authenticated_user)):
     """Fetch current user profile from token payload."""
     sub = user.get('sub')
     if sub and _auth_db_available:
