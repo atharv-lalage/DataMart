@@ -24,7 +24,8 @@ import {
   CreditCard,
   Layers,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Maximize2
 } from 'lucide-react';
 import { Card, Button, Badge, Skeleton, EmptyState } from '../components/common';
 import MetricCard from '../components/dashboard/MetricCard';
@@ -258,7 +259,30 @@ function AIChatWidget() {
                 <span style={{ fontWeight: 600, color: '#0F172A', fontSize: '0.9rem' }}>DataMart AI Analyst</span>
                 <div style={{ fontSize: '0.6875rem', color: '#64748B', marginTop: 1 }}>RAG + Text-to-SQL · Groq LLM</div>
               </div>
-              <span style={{ marginLeft: 'auto', fontSize: '0.6875rem', background: '#ECFDF5', color: '#059669', border: '1px solid #A7F3D0', padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>● Online</span>
+              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Link
+                  to="/ai-analyst"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    fontSize: '0.6875rem',
+                    color: '#4F46E5',
+                    textDecoration: 'none',
+                    fontWeight: 600,
+                    background: '#EEF2FF',
+                    border: '1px solid #C7D2FE',
+                    padding: '2px 8px',
+                    borderRadius: 6,
+                    transition: 'all 0.15s ease'
+                  }}
+                  title="Open full AI Analyst workspace"
+                >
+                  <Maximize2 size={11} />
+                  <span>Full View</span>
+                </Link>
+                <span style={{ fontSize: '0.6875rem', background: '#ECFDF5', color: '#059669', border: '1px solid #A7F3D0', padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>● Online</span>
+              </div>
             </div>
 
             {/* Messages */}

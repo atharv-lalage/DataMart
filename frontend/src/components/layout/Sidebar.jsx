@@ -9,7 +9,8 @@ import {
   LogOut,
   ShieldCheck,
   X,
-  Database
+  Database,
+  Bot
 } from 'lucide-react';
 
 const NAV_SECTIONS = [
@@ -17,6 +18,7 @@ const NAV_SECTIONS = [
     heading: 'Core Platform',
     items: [
       { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { to: '/ai-analyst', label: 'AI Analyst', icon: Bot },
       { to: '/', label: 'Storefront (OLTP)', icon: Store },
     ],
   },

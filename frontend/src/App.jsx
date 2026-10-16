@@ -10,6 +10,7 @@ import Auth from './pages/Auth';
 import Settings from './pages/Settings';
 import OLAPTerminal from './pages/OLAPTerminal';
 import ETLTracker from './pages/ETLTracker';
+import AIAnalyst from './pages/AIAnalyst';
 
 function AnimatedRoutes() {
   const location = useLocation();
@@ -18,6 +19,7 @@ function AnimatedRoutes() {
       <Routes location={location} key={location.pathname}>
         <Route path="/" element={<Home />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/ai-analyst" element={<AIAnalyst />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/terminal" element={<OLAPTerminal />} />
         <Route path="/etl" element={<ETLTracker />} />
