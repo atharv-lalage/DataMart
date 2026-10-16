@@ -1,5 +1,5 @@
 import React from 'react';
-import { Cpu, TrendingUp, Users, CheckCircle2, AlertCircle, RotateCcw, Save } from 'lucide-react';
+import { Cpu, TrendingUp, Users, CheckCircle2, AlertCircle, RotateCcw, Save, ShieldAlert } from 'lucide-react';
 import { Button } from '../common/index.js';
 
 export default function MLSettings({
@@ -10,7 +10,9 @@ export default function MLSettings({
   saving = false,
   saved = false,
   saveError = '',
-  hasChanges = false
+  hasChanges = false,
+  isAdmin = true,
+  userRole = 'admin'
 }) {
   return (
     <div className="settings-section-container">
@@ -26,7 +28,7 @@ export default function MLSettings({
           <Button
             variant="outline"
             onClick={onReset}
-            disabled={saving}
+            disabled={saving || !isAdmin}
             icon={<RotateCcw size={14} />}
           >
             Reset Defaults
@@ -34,13 +36,22 @@ export default function MLSettings({
           <Button
             variant="primary"
             onClick={onSave}
-            disabled={saving || !hasChanges}
+            disabled={saving || !hasChanges || !isAdmin}
             icon={<Save size={14} />}
           >
             {saving ? 'Saving...' : 'Save ML Parameters'}
           </Button>
         </div>
       </div>
+
+      {!isAdmin && (
+        <div className="settings-alert settings-alert--warning" style={{ background: '#FFFBEB', color: '#B45309', border: '1px solid #FDE68A' }}>
+          <ShieldAlert size={16} style={{ flexShrink: 0 }} />
+          <span>
+            <strong>Administrator Access Required:</strong> Your current role is <code>{userRole}</code>. Modifying analytical hyperparameters is restricted to administrators.
+          </span>
+        </div>
+      )}
 
       {saved && (
         <div className="settings-alert settings-alert--success">
@@ -80,6 +91,7 @@ export default function MLSettings({
                 step="1"
                 value={config.kClusters}
                 onChange={(e) => onChange('kClusters', parseInt(e.target.value, 10))}
+                disabled={saving || !isAdmin}
                 className="settings-slider"
                 id="kClustersSlider"
               />
@@ -96,6 +108,7 @@ export default function MLSettings({
                       onChange('kClusters', Math.min(6, Math.max(2, val)));
                     }
                   }}
+                  disabled={saving || !isAdmin}
                   className="settings-number-input"
                   id="kClustersInput"
                 />
@@ -148,6 +161,7 @@ export default function MLSettings({
                 step="1"
                 value={config.projectionWindow}
                 onChange={(e) => onChange('projectionWindow', parseInt(e.target.value, 10))}
+                disabled={saving || !isAdmin}
                 className="settings-slider"
                 id="projectionWindowSlider"
               />
@@ -164,6 +178,7 @@ export default function MLSettings({
                       onChange('projectionWindow', Math.min(12, Math.max(1, val)));
                     }
                   }}
+                  disabled={saving || !isAdmin}
                   className="settings-number-input"
                   id="projectionWindowInput"
                 />

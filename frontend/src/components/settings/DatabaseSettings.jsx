@@ -139,20 +139,19 @@ export default function DatabaseSettings() {
               <h4 className="settings-db-card-title">NeonDB Serverless PostgreSQL</h4>
               <p className="settings-db-card-desc">Primary Analytical Data Warehouse & OLTP Storage</p>
             </div>
-            <span className="settings-status-online">
-              <span className="settings-live-dot" />
-              <span>Connected</span>
+            <span className="settings-badge-pill settings-badge-pill--neutral">
+              Configured via DATABASE_URL
             </span>
           </div>
 
           <div className="settings-detail-list" style={{ marginTop: 'var(--space-4)' }}>
             <div className="settings-detail-row">
-              <span className="settings-detail-label">Connection URI</span>
-              <span className="settings-code-tag">Configured securely via DATABASE_URL</span>
+              <span className="settings-detail-label">Configuration Key</span>
+              <span className="settings-code-tag">DATABASE_URL (.env)</span>
             </div>
             <div className="settings-detail-row">
-              <span className="settings-detail-label">Engine Version</span>
-              <span className="settings-detail-value">PostgreSQL 16 (Serverless Neon Cloud)</span>
+              <span className="settings-detail-label">Engine Architecture</span>
+              <span className="settings-detail-value">PostgreSQL 16 (Neon Serverless Star Schema)</span>
             </div>
             <div className="settings-detail-row">
               <span className="settings-detail-label">Analytical Cache Strategy</span>
@@ -170,24 +169,23 @@ export default function DatabaseSettings() {
               <h4 className="settings-db-card-title">MongoDB Atlas Cloud</h4>
               <p className="settings-db-card-desc">Authentication & Multi-Tenant User Store</p>
             </div>
-            <span className="settings-status-online">
-              <span className="settings-live-dot" />
-              <span>Active</span>
+            <span className="settings-badge-pill settings-badge-pill--neutral">
+              Configured via MONGODB_URI
             </span>
           </div>
 
           <div className="settings-detail-list" style={{ marginTop: 'var(--space-4)' }}>
             <div className="settings-detail-row">
-              <span className="settings-detail-label">Collection</span>
+              <span className="settings-detail-label">Configuration Key</span>
+              <span className="settings-code-tag">MONGODB_URI (.env)</span>
+            </div>
+            <div className="settings-detail-row">
+              <span className="settings-detail-label">Target Collection</span>
               <span className="settings-code-tag">datamart_db.users</span>
             </div>
             <div className="settings-detail-row">
-              <span className="settings-detail-label">Access Mode</span>
-              <span className="settings-detail-value">Bcrypt Password Verification + JWT Generation</span>
-            </div>
-            <div className="settings-detail-row">
-              <span className="settings-detail-label">Security</span>
-              <span className="settings-detail-value">TLS/SSL Encrypted Connection String</span>
+              <span className="settings-detail-label">Access Architecture</span>
+              <span className="settings-detail-value">Bcrypt Password Verification & User Session Scoping</span>
             </div>
           </div>
         </div>

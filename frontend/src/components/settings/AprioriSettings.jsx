@@ -10,7 +10,9 @@ export default function AprioriSettings({
   saving = false,
   saved = false,
   saveError = '',
-  hasChanges = false
+  hasChanges = false,
+  isAdmin = true,
+  userRole = 'admin'
 }) {
   const percentSupport = (config.minSupport * 100).toFixed(1);
 
@@ -36,7 +38,7 @@ export default function AprioriSettings({
           <Button
             variant="outline"
             onClick={onReset}
-            disabled={saving}
+            disabled={saving || !isAdmin}
             icon={<RotateCcw size={14} />}
           >
             Reset Defaults
@@ -44,13 +46,22 @@ export default function AprioriSettings({
           <Button
             variant="primary"
             onClick={onSave}
-            disabled={saving || !hasChanges}
+            disabled={saving || !hasChanges || !isAdmin}
             icon={<Save size={14} />}
           >
             {saving ? 'Saving...' : 'Save Apriori Parameters'}
           </Button>
         </div>
       </div>
+
+      {!isAdmin && (
+        <div className="settings-alert settings-alert--warning" style={{ background: '#FFFBEB', color: '#B45309', border: '1px solid #FDE68A' }}>
+          <ShieldAlert size={16} style={{ flexShrink: 0 }} />
+          <span>
+            <strong>Administrator Access Required:</strong> Your current role is <code>{userRole}</code>. Modifying analytical hyperparameters is restricted to administrators.
+          </span>
+        </div>
+      )}
 
       {saved && (
         <div className="settings-alert settings-alert--success">
@@ -88,6 +99,7 @@ export default function AprioriSettings({
               step="0.01"
               value={config.minSupport}
               onChange={(e) => onChange('minSupport', parseFloat(e.target.value))}
+              disabled={saving || !isAdmin}
               className="settings-slider"
               id="minSupportSlider"
             />
@@ -104,6 +116,7 @@ export default function AprioriSettings({
                     onChange('minSupport', Math.min(0.2, Math.max(0.01, val)));
                   }
                 }}
+                disabled={saving || !isAdmin}
                 className="settings-number-input"
                 id="minSupportInput"
               />

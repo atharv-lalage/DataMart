@@ -129,8 +129,16 @@ export default function Settings() {
       });
   }, []);
 
+  const userRole = currentUser?.role || 'user';
+  const isAdmin = userRole === 'admin';
+
   const handleSave = async () => {
     setSaveError('');
+    if (!isAdmin) {
+      setSaveError(`Access Denied: Your account role is '${userRole}'. Modifying analytical parameters requires administrator privileges.`);
+      return;
+    }
+
     setSaving(true);
     try {
       const { data } = await axios.put(`${API_BASE_URL}/api/settings/analytics`, {
@@ -151,13 +159,21 @@ export default function Settings() {
       setSaved(true);
       setTimeout(() => setSaved(false), 3500);
     } catch (error) {
-      setSaveError(error.response?.data?.detail || 'Could not save settings. Ensure the backend is running.');
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        setSaveError(`Access Denied: Administrator role required to update system configuration (HTTP ${error.response.status}).`);
+      } else {
+        setSaveError(error.response?.data?.detail || 'Could not save settings. Ensure the backend is running.');
+      }
     } finally {
       setSaving(false);
     }
   };
 
   const handleReset = () => {
+    if (!isAdmin) {
+      setSaveError(`Access Denied: Only administrators can reset configurations.`);
+      return;
+    }
     setConfig(DEFAULTS);
     setSaved(false);
     setSaveError('');
@@ -190,9 +206,9 @@ export default function Settings() {
                 <span>{activeDataset}</span>
               </Badge>
             )}
-            <Badge variant="primary">
+            <Badge variant={isAdmin ? 'primary' : 'neutral'}>
               <ShieldCheck size={13} />
-              <span>{currentUser?.role === 'admin' ? 'Super Admin' : 'Tenant Operator'}</span>
+              <span>Role: {userRole}</span>
             </Badge>
           </div>
         }
@@ -227,6 +243,8 @@ export default function Settings() {
             saved={saved}
             saveError={saveError}
             hasChanges={hasChanges}
+            isAdmin={isAdmin}
+            userRole={userRole}
           />
         )}
 
@@ -240,6 +258,8 @@ export default function Settings() {
             saved={saved}
             saveError={saveError}
             hasChanges={hasChanges}
+            isAdmin={isAdmin}
+            userRole={userRole}
           />
         )}
 
