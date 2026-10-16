@@ -29,6 +29,7 @@ JWT_EXPIRATION_DAYS = 7
 _mongo_client: Optional[MongoClient] = None
 _db = None
 _users_col = None
+_last_mongo_error: Optional[str] = None
 
 
 def get_mongo_uri() -> str:
@@ -39,19 +40,41 @@ def get_mongo_uri() -> str:
     )
 
 
+def get_connection_error_message() -> str:
+    """Returns a descriptive diagnostic message when MongoDB is unreachable."""
+    uri = get_mongo_uri()
+    if "<db_password>" in uri:
+        return "Database credentials not configured: <db_password> placeholder is still in MONGODB_URI in .env."
+    if _last_mongo_error:
+        if "SSL" in _last_mongo_error or "handshake" in _last_mongo_error.lower():
+            return "MongoDB Atlas rejected the SSL handshake. Please ensure your current IP address is whitelisted in your MongoDB Atlas Dashboard under Network Access (or allow 0.0.0.0/0 for development)."
+        return f"MongoDB Atlas connection failed: {_last_mongo_error}"
+    return "MongoDB connection not available. Please verify MONGODB_URI and Network Access."
+
+
 def get_users_collection():
     """Lazily initializes MongoDB connection and ensures indexes."""
-    global _mongo_client, _db, _users_col
+    global _mongo_client, _db, _users_col, _last_mongo_error
     if _users_col is not None:
         return _users_col
 
     uri = get_mongo_uri()
     if "<db_password>" in uri:
+        _last_mongo_error = "<db_password> placeholder still in MONGODB_URI."
         print("[MongoDB Auth] Warning: <db_password> placeholder still in MONGODB_URI. Update .env with real password.")
         return None
 
     try:
-        _mongo_client = MongoClient(uri, serverSelectionTimeoutMS=5000)
+        import certifi
+        ca_file = certifi.where()
+    except Exception:
+        ca_file = None
+
+    try:
+        client_kwargs = {"serverSelectionTimeoutMS": 5000}
+        if ca_file:
+            client_kwargs["tlsCAFile"] = ca_file
+        _mongo_client = MongoClient(uri, **client_kwargs)
         # Verify connection
         _mongo_client.admin.command('ping')
         _db = _mongo_client.get_database("datamart_db")
@@ -63,6 +86,7 @@ def get_users_collection():
         print("[MongoDB Auth] Successfully connected to MongoDB Atlas. Indexes ready.")
         return _users_col
     except Exception as e:
+        _last_mongo_error = str(e)
         print(f"[MongoDB Auth] Connection failed: {e}")
         return None
 
@@ -130,7 +154,7 @@ def register_user(username: str, email: str, password: str, role: str = "admin")
 
     users_col = get_users_collection()
     if users_col is None:
-        raise RuntimeError("Database connection not configured. Please set a valid MONGODB_URI in .env.")
+        raise RuntimeError(get_connection_error_message())
 
     # Check for existing user
     if users_col.find_one({"email": email}):
@@ -181,7 +205,7 @@ def login_user(identifier: str, password: str) -> Dict[str, Any]:
 
     users_col = get_users_collection()
     if users_col is None:
-        raise RuntimeError("Database connection not configured. Please set a valid MONGODB_URI in .env.")
+        raise RuntimeError(get_connection_error_message())
 
     # Search by email or username (case-insensitive)
     user = users_col.find_one({
