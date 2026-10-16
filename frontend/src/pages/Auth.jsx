@@ -1,33 +1,91 @@
 import React, { useState } from 'react';
-// eslint-disable-next-line no-unused-vars
-import { motion, AnimatePresence } from 'framer-motion';
-import { Store, Lock, User, Mail, Sparkles, ArrowRight, CheckCircle2 } from 'lucide-react';
+import {
+  Lock,
+  User,
+  Mail,
+  ArrowRight,
+  CheckCircle2,
+  AlertCircle,
+  Eye,
+  EyeOff,
+  Loader2,
+  Database,
+  ShieldCheck,
+  UserPlus
+} from 'lucide-react';
 import axios from 'axios';
 import API_BASE_URL from '../config';
 
+/**
+ * Enterprise Authentication Page — DataMart Hybrid Design System
+ * 
+ * Supports:
+ *  - MongoDB Atlas JWT Authentication (Bcrypt + HS256)
+ *  - Legacy Basic Auth fallback for emergency / single-admin recovery
+ *  - In-line field validation and backend error handling
+ *  - Password visibility toggle & accessible form controls
+ */
 export default function Auth({ onLogin }) {
   const [mode, setMode] = useState('login'); // 'login' | 'register'
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [successMsg, setSuccessMsg] = useState('');
+
+  const switchMode = (newMode) => {
+    if (loading) return;
+    setMode(newMode);
+    setError('');
+    setFieldErrors({});
+    setSuccessMsg('');
+  };
+
+  const validate = () => {
+    const errs = {};
+    const trimmedUser = username.trim();
+    const trimmedEmail = email.trim();
+
+    if (!trimmedUser) {
+      errs.username = mode === 'login' ? 'Username or email is required' : 'Username is required';
+    } else if (mode === 'register' && trimmedUser.length < 3) {
+      errs.username = 'Username must be at least 3 characters';
+    }
+
+    if (mode === 'register') {
+      if (!trimmedEmail) {
+        errs.email = 'Email address is required';
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+        errs.email = 'Enter a valid email address';
+      }
+    }
+
+    if (!password) {
+      errs.password = 'Password is required';
+    } else if (mode === 'register' && password.length < 6) {
+      errs.password = 'Password must be at least 6 characters';
+    }
+
+    setFieldErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setSuccessMsg('');
+
+    if (!validate()) {
+      return;
+    }
+
     setLoading(true);
 
     try {
       if (mode === 'register') {
-        if (!username.trim() || !email.trim() || !password) {
-          setError('Please fill in all fields.');
-          setLoading(false);
-          return;
-        }
-
         const res = await axios.post(`${API_BASE_URL}/api/auth/register`, {
           username: username.trim(),
           email: email.trim().toLowerCase(),
@@ -37,20 +95,18 @@ export default function Auth({ onLogin }) {
         const { token, user } = res.data;
         if (token) {
           localStorage.setItem('datamart_token', token);
-          localStorage.setItem('datamart_user', JSON.stringify(user));
+          if (user) {
+            localStorage.setItem('datamart_user', JSON.stringify(user));
+          }
           axios.defaults.headers.common.Authorization = `Bearer ${token}`;
-          onLogin(token, user);
+          setSuccessMsg('Account created successfully. Redirecting...');
+          setTimeout(() => {
+            onLogin(token, user);
+          }, 350);
           return;
         }
       } else {
         // Login mode
-        if (!username.trim() || !password) {
-          setError('Please enter your username/email and password.');
-          setLoading(false);
-          return;
-        }
-
-        // Try MongoDB JWT login first
         try {
           const res = await axios.post(`${API_BASE_URL}/api/auth/login`, {
             identifier: username.trim(),
@@ -60,13 +116,18 @@ export default function Auth({ onLogin }) {
           const { token, user } = res.data;
           if (token) {
             localStorage.setItem('datamart_token', token);
-            localStorage.setItem('datamart_user', JSON.stringify(user));
+            if (user) {
+              localStorage.setItem('datamart_user', JSON.stringify(user));
+            }
             axios.defaults.headers.common.Authorization = `Bearer ${token}`;
-            onLogin(token, user);
+            setSuccessMsg('Authentication successful. Redirecting...');
+            setTimeout(() => {
+              onLogin(token, user);
+            }, 300);
             return;
           }
         } catch (loginErr) {
-          // If MongoDB is not yet configured or returned 503, attempt legacy Basic Auth fallback
+          // If MongoDB returns 503 (database unavailable) or dev fallback
           if (loginErr.response?.status === 503 || (username === 'admin' && password === 'admin')) {
             const basicAuth = `Basic ${window.btoa(`${username}:${password}`)}`;
             try {
@@ -78,7 +139,6 @@ export default function Auth({ onLogin }) {
               onLogin(basicAuth, { username, role: 'admin' });
               return;
             } catch {
-              // Dev bypass if completely offline
               if (import.meta.env.DEV && username === 'admin' && password === 'admin') {
                 onLogin(basicAuth, { username: 'admin', role: 'admin' });
                 return;
@@ -90,7 +150,7 @@ export default function Auth({ onLogin }) {
       }
     } catch (err) {
       if (!err.response) {
-        setError('Cannot reach backend on port 8001. Check server status.');
+        setError('Unable to reach DataMart analytical backend on port 8001. Ensure the server is running.');
       } else {
         setError(err.response?.data?.detail || err.response?.data?.message || 'Authentication failed. Please verify credentials.');
       }
@@ -100,315 +160,275 @@ export default function Auth({ onLogin }) {
   };
 
   return (
-    <div
-      className="app"
-      style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        minHeight: '100vh',
-        background: 'radial-gradient(ellipse at top, #1e1b4b 0%, var(--bg-main) 70%)',
-        padding: '1.5rem',
-      }}
-    >
-      <motion.div
-        className="glass-panel"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        style={{
-          padding: '2.5rem',
-          width: '100%',
-          maxWidth: '440px',
-          borderRadius: 20,
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.4)',
-        }}
-      >
+    <div className="auth-wrapper">
+      <div className="auth-card">
         {/* Brand Header */}
-        <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
-          <div
-            style={{
-              display: 'inline-flex',
-              padding: '0.9rem',
-              background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(236, 72, 153, 0.2))',
-              borderRadius: '50%',
-              marginBottom: '0.75rem',
-              border: '1px solid rgba(99, 102, 241, 0.3)',
-            }}
-          >
-            <Store size={36} color="var(--accent-primary)" />
+        <div className="auth-header">
+          <div className="auth-brand-badge" aria-hidden="true">
+            <Database size={24} />
           </div>
-          <h2 style={{ fontFamily: 'Outfit', fontSize: '1.75rem', fontWeight: 700, margin: '0 0 0.3rem 0' }}>
-            DataMart Platform
-          </h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', margin: 0 }}>
+          <h1 className="auth-title">DataMart</h1>
+          <p className="auth-subtitle">
             {mode === 'login'
-              ? 'Sign in to access analytics & warehouse intelligence'
-              : 'Create a MongoDB-authenticated profile'}
+              ? 'Sign in to access analytical warehouse & intelligence'
+              : 'Create an authenticated enterprise analyst account'}
           </p>
         </div>
 
         {/* Tab Switcher */}
-        <div
-          style={{
-            display: 'flex',
-            background: 'rgba(0, 0, 0, 0.3)',
-            borderRadius: 12,
-            padding: 4,
-            marginBottom: '1.5rem',
-            border: '1px solid rgba(255, 255, 255, 0.06)',
-          }}
-        >
+        <div className="auth-tabs" role="tablist" aria-label="Authentication Options">
           <button
             type="button"
-            onClick={() => {
-              setMode('login');
-              setError('');
-            }}
-            style={{
-              flex: 1,
-              padding: '0.55rem',
-              border: 'none',
-              borderRadius: 8,
-              cursor: 'pointer',
-              fontWeight: 600,
-              fontSize: '0.85rem',
-              transition: 'all 0.2s',
-              background: mode === 'login' ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'transparent',
-              color: mode === 'login' ? '#fff' : 'var(--text-muted)',
-              boxShadow: mode === 'login' ? '0 4px 12px rgba(99, 102, 241, 0.3)' : 'none',
-            }}
+            role="tab"
+            aria-selected={mode === 'login'}
+            aria-controls="auth-panel"
+            className={`auth-tab-btn ${mode === 'login' ? 'auth-tab-btn--active' : ''}`}
+            onClick={() => switchMode('login')}
+            disabled={loading}
           >
-            Sign In
+            <User size={15} />
+            <span>Sign In</span>
           </button>
           <button
             type="button"
-            onClick={() => {
-              setMode('register');
-              setError('');
-            }}
-            style={{
-              flex: 1,
-              padding: '0.55rem',
-              border: 'none',
-              borderRadius: 8,
-              cursor: 'pointer',
-              fontWeight: 600,
-              fontSize: '0.85rem',
-              transition: 'all 0.2s',
-              background: mode === 'register' ? 'linear-gradient(135deg, #ec4899, #be185d)' : 'transparent',
-              color: mode === 'register' ? '#fff' : 'var(--text-muted)',
-              boxShadow: mode === 'register' ? '0 4px 12px rgba(236, 72, 153, 0.3)' : 'none',
-            }}
+            role="tab"
+            aria-selected={mode === 'register'}
+            aria-controls="auth-panel"
+            className={`auth-tab-btn ${mode === 'register' ? 'auth-tab-btn--active' : ''}`}
+            onClick={() => switchMode('register')}
+            disabled={loading}
           >
-            Create Account
+            <UserPlus size={15} />
+            <span>Register</span>
           </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
+        {/* Alert Messages */}
+        {error && (
+          <div className="auth-alert auth-alert--danger" role="alert" style={{ marginBottom: 'var(--space-4)' }}>
+            <AlertCircle size={16} className="auth-alert-icon" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {successMsg && (
+          <div className="auth-alert auth-alert--success" role="status" style={{ marginBottom: 'var(--space-4)' }}>
+            <CheckCircle2 size={16} className="auth-alert-icon" />
+            <span>{successMsg}</span>
+          </div>
+        )}
+
+        {/* Auth Form */}
+        <form id="auth-panel" onSubmit={handleSubmit} className="auth-form" noValidate>
           {/* Username / Identifier */}
-          <div>
-            <label style={{ display: 'block', marginBottom: '0.4rem', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-              {mode === 'login' ? 'Username or Email' : 'Username'}
-            </label>
+          <div className="auth-field">
+            <div className="auth-field-header">
+              <label htmlFor="auth-username" className="auth-label">
+                {mode === 'login' ? 'Username or Email' : 'Username'}
+                <span className="auth-label-required" aria-hidden="true">*</span>
+              </label>
+              {mode === 'register' && (
+                <span className="auth-helper-text">Min 3 characters</span>
+              )}
+            </div>
             <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                background: 'rgba(0,0,0,0.25)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: 10,
-                padding: '0.55rem 0.85rem',
-              }}
+              className={`auth-input-group ${fieldErrors.username ? 'auth-input-group--error' : ''} ${
+                loading ? 'auth-input-group--disabled' : ''
+              }`}
             >
-              <User size={17} color="var(--text-muted)" style={{ marginRight: '0.6rem', flexShrink: 0 }} />
+              <span className="auth-input-icon" aria-hidden="true">
+                <User size={16} />
+              </span>
               <input
+                id="auth-username"
+                name="username"
                 type="text"
+                autoComplete="username"
+                autoFocus
+                disabled={loading}
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder={mode === 'login' ? 'e.g. admin or atharv' : 'Choose a unique username'}
-                required
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'white',
-                  outline: 'none',
-                  width: '100%',
-                  fontSize: '0.9rem',
+                onChange={(e) => {
+                  setUsername(e.target.value);
+                  if (fieldErrors.username) {
+                    setFieldErrors((prev) => ({ ...prev, username: null }));
+                  }
                 }}
+                placeholder={mode === 'login' ? 'Enter username or email' : 'Choose a unique username'}
+                className="auth-input"
+                aria-invalid={!!fieldErrors.username}
+                aria-describedby={fieldErrors.username ? 'auth-username-error' : undefined}
+                required
               />
             </div>
+            {fieldErrors.username && (
+              <span id="auth-username-error" className="auth-field-error">
+                <AlertCircle size={12} /> {fieldErrors.username}
+              </span>
+            )}
           </div>
 
           {/* Email (only in register mode) */}
           {mode === 'register' && (
-            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
-              <label style={{ display: 'block', marginBottom: '0.4rem', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-                Email Address
-              </label>
+            <div className="auth-field">
+              <div className="auth-field-header">
+                <label htmlFor="auth-email" className="auth-label">
+                  Email Address
+                  <span className="auth-label-required" aria-hidden="true">*</span>
+                </label>
+              </div>
               <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  background: 'rgba(0,0,0,0.25)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: 10,
-                  padding: '0.55rem 0.85rem',
-                }}
+                className={`auth-input-group ${fieldErrors.email ? 'auth-input-group--error' : ''} ${
+                  loading ? 'auth-input-group--disabled' : ''
+                }`}
               >
-                <Mail size={17} color="var(--text-muted)" style={{ marginRight: '0.6rem', flexShrink: 0 }} />
+                <span className="auth-input-icon" aria-hidden="true">
+                  <Mail size={16} />
+                </span>
                 <input
+                  id="auth-email"
+                  name="email"
                   type="email"
+                  autoComplete="email"
+                  disabled={loading}
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@company.com"
-                  required
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'white',
-                    outline: 'none',
-                    width: '100%',
-                    fontSize: '0.9rem',
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (fieldErrors.email) {
+                      setFieldErrors((prev) => ({ ...prev, email: null }));
+                    }
                   }}
+                  placeholder="analyst@company.com"
+                  className="auth-input"
+                  aria-invalid={!!fieldErrors.email}
+                  aria-describedby={fieldErrors.email ? 'auth-email-error' : undefined}
+                  required
                 />
               </div>
-            </motion.div>
+              {fieldErrors.email && (
+                <span id="auth-email-error" className="auth-field-error">
+                  <AlertCircle size={12} /> {fieldErrors.email}
+                </span>
+              )}
+            </div>
           )}
 
           {/* Password */}
-          <div>
-            <label style={{ display: 'block', marginBottom: '0.4rem', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-              Password
-            </label>
+          <div className="auth-field">
+            <div className="auth-field-header">
+              <label htmlFor="auth-password" className="auth-label">
+                Password
+                <span className="auth-label-required" aria-hidden="true">*</span>
+              </label>
+              {mode === 'register' && (
+                <span className="auth-helper-text">Min 6 characters</span>
+              )}
+            </div>
             <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                background: 'rgba(0,0,0,0.25)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: 10,
-                padding: '0.55rem 0.85rem',
-              }}
+              className={`auth-input-group ${fieldErrors.password ? 'auth-input-group--error' : ''} ${
+                loading ? 'auth-input-group--disabled' : ''
+              }`}
             >
-              <Lock size={17} color="var(--text-muted)" style={{ marginRight: '0.6rem', flexShrink: 0 }} />
+              <span className="auth-input-icon" aria-hidden="true">
+                <Lock size={16} />
+              </span>
               <input
-                type="password"
+                id="auth-password"
+                name="password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                disabled={loading}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={mode === 'register' ? 'Minimum 6 characters' : 'Enter password'}
-                required
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'white',
-                  outline: 'none',
-                  width: '100%',
-                  fontSize: '0.9rem',
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (fieldErrors.password) {
+                    setFieldErrors((prev) => ({ ...prev, password: null }));
+                  }
                 }}
+                placeholder={mode === 'register' ? 'Choose a secure password' : 'Enter your password'}
+                className="auth-input"
+                aria-invalid={!!fieldErrors.password}
+                aria-describedby={fieldErrors.password ? 'auth-password-error' : undefined}
+                required
               />
+              <button
+                type="button"
+                className="auth-toggle-visibility-btn"
+                onClick={() => setShowPassword((prev) => !prev)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
             </div>
+            {fieldErrors.password && (
+              <span id="auth-password-error" className="auth-field-error">
+                <AlertCircle size={12} /> {fieldErrors.password}
+              </span>
+            )}
           </div>
-
-          {/* Error / Success Messages */}
-          {error && (
-            <div
-              style={{
-                background: 'rgba(236, 72, 153, 0.1)',
-                border: '1px solid rgba(236, 72, 153, 0.3)',
-                borderRadius: 8,
-                padding: '0.55rem 0.75rem',
-                color: '#f472b6',
-                fontSize: '0.82rem',
-                textAlign: 'center',
-              }}
-            >
-              {error}
-            </div>
-          )}
-
-          {successMsg && (
-            <div
-              style={{
-                background: 'rgba(16, 185, 129, 0.1)',
-                border: '1px solid rgba(16, 185, 129, 0.3)',
-                borderRadius: 8,
-                padding: '0.55rem 0.75rem',
-                color: '#34d399',
-                fontSize: '0.82rem',
-                textAlign: 'center',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-              }}
-            >
-              <CheckCircle2 size={16} /> {successMsg}
-            </div>
-          )}
 
           {/* Submit Button */}
           <button
             type="submit"
             disabled={loading}
-            style={{
-              width: '100%',
-              padding: '0.75rem',
-              marginTop: '0.4rem',
-              borderRadius: 10,
-              border: 'none',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              fontWeight: 600,
-              fontSize: '0.92rem',
-              color: '#fff',
-              background:
-                mode === 'login'
-                  ? 'linear-gradient(135deg, #6366f1, #ec4899)'
-                  : 'linear-gradient(135deg, #ec4899, #8b5cf6)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              boxShadow: '0 8px 24px rgba(99, 102, 241, 0.3)',
-              transition: 'opacity 0.2s',
-              opacity: loading ? 0.7 : 1,
-            }}
+            className="auth-submit-btn"
+            id="auth-submit-button"
           >
             {loading ? (
-              'Authenticating...'
+              <>
+                <Loader2 size={16} className="auth-spinner" />
+                <span>{mode === 'login' ? 'Authenticating...' : 'Creating Account...'}</span>
+              </>
             ) : mode === 'login' ? (
               <>
-                Sign In to Platform <ArrowRight size={16} />
+                <span>Sign In to Platform</span>
+                <ArrowRight size={16} />
               </>
             ) : (
               <>
-                Create Account <Sparkles size={16} />
+                <span>Create Account</span>
+                <ArrowRight size={16} />
               </>
             )}
           </button>
         </form>
 
-        {/* Database indicator */}
-        <div
-          style={{
-            marginTop: '1.5rem',
-            paddingTop: '1rem',
-            borderTop: '1px solid rgba(255, 255, 255, 0.06)',
-            textAlign: 'center',
-            fontSize: '0.72rem',
-            color: 'var(--text-muted)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 6,
-          }}
-        >
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
-          <span>MongoDB Atlas Authentication Protected</span>
+        {/* Footer */}
+        <div className="auth-footer">
+          <p className="auth-switch-prompt">
+            {mode === 'login' ? (
+              <>
+                Don&apos;t have an account?{' '}
+                <button
+                  type="button"
+                  className="auth-switch-link"
+                  onClick={() => switchMode('register')}
+                  disabled={loading}
+                >
+                  Create an account
+                </button>
+              </>
+            ) : (
+              <>
+                Already have an account?{' '}
+                <button
+                  type="button"
+                  className="auth-switch-link"
+                  onClick={() => switchMode('login')}
+                  disabled={loading}
+                >
+                  Sign in
+                </button>
+              </>
+            )}
+          </p>
+
+          <div className="auth-security-badge">
+            <ShieldCheck size={13} color="var(--color-success)" />
+            <span>Protected by HS256 Token Signature &amp; Bcrypt Encryption</span>
+          </div>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }
